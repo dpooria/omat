@@ -4,10 +4,6 @@ import "base:intrinsics"
 import "core:fmt"
 import "core:mem"
 
-Vector3i :: [3]int
-Vector3f :: [3]f64
-Vector3c :: [3]complex128
-
 Tensor :: struct($T: typeid, $N: int) where intrinsics.type_is_numeric(T) {
     allocator: mem.Allocator,
     data:      []T,
@@ -16,6 +12,7 @@ Tensor :: struct($T: typeid, $N: int) where intrinsics.type_is_numeric(T) {
     // owns_data: bool,
 }
 
+@(require_results)
 tensor_create :: proc(
     $T: typeid,
     shape: [$N]int,
@@ -59,6 +56,7 @@ tensor_from_data :: proc(
     return Tensor(T, N){allocator = allocator, shape = shape, data = data}
 }
 
+@(require_results)
 tensor_copy :: proc(src: Tensor($T, $N)) -> (dst: Tensor(T, N)) {
     dst, _ = tensor_create(T, src.shape, src.allocator)
     copy(dst.data, src.data)
