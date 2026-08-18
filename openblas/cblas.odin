@@ -1,4 +1,4 @@
-package oblas
+package openblas
 
 import "core:c"
 foreign import openblas_cblas "system:openblas64"
@@ -197,10 +197,16 @@ foreign openblas_cblas {
     caxpby :: proc(n: blasint, alpha: ^complex64, x: [^]complex64, incx: blasint, beta: ^complex64, y: [^]complex64, incy: blasint) ---
     zaxpby :: proc(n: blasint, alpha: ^complex128, x: [^]complex128, incx: blasint, beta: ^complex128, y: [^]complex128, incy: blasint) ---
 
-    // Out-of-place and in-place matrix copy/transpose routines
+    somatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: f32, a: [^]f32, lda: blasint, b: [^]f32, ldb: blasint) ---
     domatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: f64, a: [^]f64, lda: blasint, b: [^]f64, ldb: blasint) ---
-    dimatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: f64, a: [^]f64, lda: blasint, rda: blasint) ---
+    comatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: ^complex64, a: [^]complex64, lda: blasint, b: [^]complex64, ldb: blasint) ---
+    zomatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: ^complex128, a: [^]complex128, lda: blasint, b: [^]complex128, ldb: blasint) ---
 
+
+    simatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: f32, a: [^]f32, lda: blasint, rda: blasint) ---
+    dimatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: f64, a: [^]f64, lda: blasint, rda: blasint) ---
+    cimatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: ^complex64, a: [^]complex64, lda: blasint, ldb: blasint) ---
+	zimatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: ^complex128, a: [^]complex128, lda: blasint, ldb: blasint) ---
 
     sgemm_batch :: proc(order: Order, TransA_array: [^]Transpose, TransB_array: [^]Transpose, M_array: [^]blasint, N_array: [^]blasint, K_array: [^]blasint, alpha_array: [^]f32, A_array: [^]^f32, lda_array: [^]blasint, B_array: [^]^f32, ldb_array: [^]blasint, beta_array: [^]f32, C_array: [^]^f32, ldc_array: [^]blasint, group_count: blasint, group_size: [^]blasint) ---
 

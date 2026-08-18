@@ -32,7 +32,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 // a stripped down version of https://github.com/kalsprite/odin-openblas.git
 
-package oblas
+package openblas
 
 foreign import openblas_lapacke "system:openblas64"
 

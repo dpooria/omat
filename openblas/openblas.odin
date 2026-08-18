@@ -1,4 +1,4 @@
-package oblas
+package openblas
 
 import "core:c"
 

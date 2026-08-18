@@ -5,7 +5,7 @@ import "core:math"
 import "core:testing"
 
 import om ".."
-import oblas "../oblas"
+import ob "../openblas"
 
 @(test)
 playground :: proc(t: ^testing.T) {

@@ -1,10 +1,10 @@
 package omat
 
-import "oblas"
+import ob "openblas"
 
+dot :: proc() {
 
-
-dot :: proc {
-    dot_f64,
 }
+
+
 

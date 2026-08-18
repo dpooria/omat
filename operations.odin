@@ -1,7 +1,10 @@
 package omat
 
+import "base:intrinsics"
 import "core:math"
-import "oblas"
+import ob "openblas"
+
+// TODO: write test for these
 
 // -- unary-ops --
 neg :: proc(t: Tensor($T, $N)) -> Tensor(T, N) {
@@ -11,26 +14,21 @@ neg :: proc(t: Tensor($T, $N)) -> Tensor(T, N) {
     }
     return res
 }
+
 ineg :: proc(t: ^Tensor($T, $N)) {
-    when T == f32 {
-        oblas.sscal(oblas.blasint(len(t.data)), -1.0, raw_data(t.data), 1)
-    } else when T == f64 {
-        oblas.dscal(oblas.blasint(len(t.data)), -1.0, raw_data(t.data), 1)
-    } else when T == complex64 {
-        oblas.cscal(oblas.blasint(len(t.data)), -1.0, raw_data(t.data), 1)
-    } else when T == complex128 {
-        oblas.zscal(oblas.blasint(len(t.data)), -1.0, raw_data(t.data), 1)
+    when T == f32 || T == f64 || T == complex64 || T == complex128 {
+        imultiply_scalar(t, -1.0)
     } else {
         for &value in t.data {
             value^ = -value^
         }
     }
-
 }
 
 // -- binary-ops ---
 
 // ---
+@(require_results)
 multiply_scalar :: proc(t: Tensor($T, $N), alpha: T) -> Tensor(T, N) {
     res := zeros(T, t.shape, t.allocator)
     for value, i in t.data {
@@ -39,6 +37,15 @@ multiply_scalar :: proc(t: Tensor($T, $N), alpha: T) -> Tensor(T, N) {
     return res
 }
 
+@(require_results)
+multiply_scalar2 :: proc(
+    alpha: $T,
+    t: Tensor(T, $N),
+) -> Tensor(T, N) where intrinsics.type_is_numeric(T) {
+    return multiply_scalar(t, alpha)
+}
+
+@(require_results)
 multiply_tensors :: proc(a: Tensor($T, $N), b: Tensor(T, N)) -> Tensor(T, N) {
     for i in 0 ..< N {
         assert(a.shape[i] == b.shape[i])
@@ -53,26 +60,31 @@ multiply_tensors :: proc(a: Tensor($T, $N), b: Tensor(T, N)) -> Tensor(T, N) {
 
 multiply :: proc {
     multiply_scalar,
+    multiply_scalar2,
     multiply_tensors,
 }
 
 // inplace
 imultiply_scalar :: proc(t: ^Tensor($T, $N), alpha: T) {
     when T == f32 {
-        oblas.sscal(oblas.blasint(len(t.data)), alpha, raw_data(t.data), 1)
+        ob.sscal(ob.blasint(len(t.data)), alpha, raw_data(t.data), 1)
     } else when T == f64 {
-        oblas.dscal(oblas.blasint(len(t.data)), alpha, raw_data(t.data), 1)
+        ob.dscal(ob.blasint(len(t.data)), alpha, raw_data(t.data), 1)
     } else when T == complex64 {
         alpha := alpha
-        oblas.cscal(oblas.blasint(len(t.data)), &alpha, raw_data(t.data), 1)
+        ob.cscal(ob.blasint(len(t.data)), &alpha, raw_data(t.data), 1)
     } else when T == complex128 {
         alpha := alpha
-        oblas.zscal(oblas.blasint(len(t.data)), &alpha, raw_data(t.data), 1)
+        ob.zscal(ob.blasint(len(t.data)), &alpha, raw_data(t.data), 1)
     } else {
         for &value in t.data {
             value^ *= alpha
         }
     }
+}
+
+imultiply_scalar2 :: proc(alpha: $T, t: ^Tensor(T, $N)) where intrinsics.type_is_numeric(T) {
+    imultiply_scalar(t, alpha)
 }
 
 imultiply_tensors :: proc(a: ^Tensor($T, $N), b: Tensor(T, N)) {
@@ -86,6 +98,7 @@ imultiply_tensors :: proc(a: ^Tensor($T, $N), b: Tensor(T, N)) {
 
 imultiply :: proc {
     imultiply_scalar,
+    imultiply_scalar2,
     imultiply_tensors,
 }
 
@@ -97,6 +110,14 @@ add_scalar :: proc(t: Tensor($T, $N), alpha: T) -> Tensor(T, N) {
         res.data[i] = alpha + value
     }
     return res
+}
+
+@(require_results)
+add_scalar2 :: proc(
+    alpha: $T,
+    t: Tensor(T, $N),
+) -> Tensor(T, N) where intrinsics.type_is_numeric(T) {
+    return add_scalar(t, alpha)
 }
 
 @(require_results)
@@ -114,6 +135,7 @@ add_tensors :: proc(a: Tensor($T, $N), b: Tensor(T, N)) -> Tensor(T, N) {
 
 add :: proc {
     add_scalar,
+    add_scalar2,
     add_tensors,
 }
 
@@ -122,6 +144,10 @@ iadd_scalar :: proc(t: ^Tensor($T, $N), alpha: T) {
     for &value in t.data {
         value^ += alpha
     }
+}
+
+iadd_scalar2 :: proc(alpha: $T, t: ^Tensor(T, $N)) where intrinsics.type_is_numeric(T) {
+    iadd_scalar(t, alpha)
 }
 
 iadd_tensors :: proc(a: ^Tensor($T, $N), b: Tensor(T, N)) {
@@ -135,6 +161,7 @@ iadd_tensors :: proc(a: ^Tensor($T, $N), b: Tensor(T, N)) {
 
 iadd :: proc {
     iadd_scalar,
+    iadd_scalar2,
     iadd_tensors,
 }
 
@@ -149,7 +176,10 @@ subtract_scalar :: proc(t: Tensor($T, $N), alpha: T) -> Tensor(T, N) {
 }
 
 @(require_results)
-subtract_scalar2 :: proc(alpha: $T, t: Tensor(T, $N)) -> Tensor(T, N) {
+subtract_scalar2 :: proc(
+    alpha: $T,
+    t: Tensor(T, $N),
+) -> Tensor(T, N) where intrinsics.type_is_numeric(T) {
     res := zeros(T, t.shape, t.allocator)
     for value, i in t.data {
         res.data[i] = alpha - value
@@ -183,7 +213,7 @@ isubtract_scalar :: proc(t: ^Tensor($T, $N), alpha: T) {
     }
 }
 
-isubtract_scalar2 :: proc(alpha: $T, t: ^Tensor(T, $N)) {
+isubtract_scalar2 :: proc(alpha: $T, t: ^Tensor(T, $N)) where intrinsics.type_is_numeric(T) {
     for value, i in t.data {
         t.data[i] = alpha - value
     }
@@ -216,7 +246,10 @@ divide_scalar :: proc(t: Tensor($T, $N), alpha: T) -> Tensor(T, N) {
 }
 
 @(require_results)
-divide_scalar2 :: proc(alpha: $T, t: Tensor(T, $N)) -> Tensor(T, N) {
+divide_scalar2 :: proc(
+    alpha: $T,
+    t: Tensor(T, $N),
+) -> Tensor(T, N) where intrinsics.type_is_numeric(T) {
     res := zeros(T, t.shape, t.allocator)
     for value, i in t.data {
         res.data[i] = alpha / value
@@ -250,7 +283,7 @@ idivide_scalar :: proc(t: ^Tensor($T, $N), alpha: T) {
     }
 }
 
-idivide_scalar2 :: proc(alpha: $T, t: ^Tensor(T, $N)) {
+idivide_scalar2 :: proc(alpha: $T, t: ^Tensor(T, $N)) where intrinsics.type_is_numeric(T) {
     for value, i in t.data {
         t.data[i] = alpha / value
     }
@@ -284,7 +317,10 @@ pow_scalar :: proc(t: Tensor($T, $N), power: T) -> Tensor(T, N) {
 }
 
 @(require_results)
-pow_scalar2 :: proc(alpha: $T, power: Tensor(T, $N)) -> Tensor(T, N) {
+pow_scalar2 :: proc(
+    alpha: $T,
+    power: Tensor(T, $N),
+) -> Tensor(T, N) where intrinsics.type_is_numeric(T) {
     res := zeros(T, power.shape, power.allocator)
     for value, i in power.data {
         res.data[i] = pow(alpha, value)
@@ -318,7 +354,7 @@ ipow_scalar :: proc(t: ^Tensor($T, $N), power: T) {
     }
 }
 
-ipow_scalar2 :: proc(alpha: $T, power: ^Tensor(T, $N)) {
+ipow_scalar2 :: proc(alpha: $T, power: ^Tensor(T, $N)) where intrinsics.type_is_numeric(T) {
     for value, i in power.data {
         power.data[i] = pow(alpha, value)
     }

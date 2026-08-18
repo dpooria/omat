@@ -3,7 +3,7 @@ package test
 import "core:testing"
 
 import om ".."
-import "../oblas"
+import ob "../openblas"
 
 @(test)
 cblas_ddot :: proc(t: ^testing.T) {
@@ -14,6 +14,6 @@ cblas_ddot :: proc(t: ^testing.T) {
         om.tensor_destroy(&x)
         om.tensor_destroy(&y)
     }
-    res := oblas.ddot(oblas.blasint(N), raw_data(x.data), 1, raw_data(y.data), 1)
+    res := ob.ddot(ob.blasint(N), raw_data(x.data), 1, raw_data(y.data), 1)
     testing.expect(t, abs(res - 32.0) < 1e-12)
 }

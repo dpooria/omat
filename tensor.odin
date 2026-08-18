@@ -12,6 +12,8 @@ Tensor :: struct($T: typeid, $N: int) where intrinsics.type_is_numeric(T) {
     allocator: mem.Allocator,
     data:      []T,
     shape:     [N]int,
+    // strides:   [N]int,
+    // owns_data: bool,
 }
 
 tensor_create :: proc(
