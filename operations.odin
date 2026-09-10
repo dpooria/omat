@@ -459,7 +459,7 @@ pow_scalar2 :: proc(
 ) -> Tensor(T, N) where intrinsics.type_is_numeric(T) {
     res := zeros(T, power.shape, power.allocator)
     for value, i in power.data {
-        res.data[i] = pow(alpha, value)
+        res.data[i] = math.pow(alpha, value)
     }
     return res
 }
@@ -492,7 +492,7 @@ ipow_scalar :: proc(t: ^Tensor($T, $N), power: T) {
 
 ipow_scalar2 :: proc(alpha: $T, power: ^Tensor(T, $N)) where intrinsics.type_is_numeric(T) {
     for value, i in power.data {
-        power.data[i] = pow(alpha, value)
+        power.data[i] = math.pow(alpha, value)
     }
 }
 

@@ -1,5 +1,6 @@
 package omat
 
+import "base:builtin"
 import "core:bytes"
 import "core:fmt"
 import "core:mem"
@@ -43,7 +44,7 @@ write_npy :: proc(path: string, data: []$T, shape: [$N]int) -> os.Error {
     }
     strings.write_byte(&header, '\n')
 
-    if len(header.buf) > int(max(u16)) {
+    if len(header.buf) > int(builtin.max(u16)) {
         return .Invalid_Argument
     }
 
@@ -178,7 +179,7 @@ npy_parse_shape :: proc(header: string, $N: int) -> (shape: [N]int, ok: bool) {
         dimension := 0
         for index < len(header) && header[index] >= '0' && header[index] <= '9' {
             digit := int(header[index] - '0')
-            if dimension > (max(int) - digit) / 10 {
+            if dimension > (builtin.max(int) - digit) / 10 {
                 return {}, false
             }
             dimension = dimension * 10 + digit
@@ -277,12 +278,12 @@ read_npy :: proc(
 
     element_count := 1
     for dimension in parsed_shape {
-        if dimension != 0 && element_count > max(int) / dimension {
+        if dimension != 0 && element_count > builtin.max(int) / dimension {
             return nil, {}, .Invalid_Argument
         }
         element_count *= dimension
     }
-    if element_count > max(int) / size_of(T) {
+    if element_count > builtin.max(int) / size_of(T) {
         return nil, {}, .Invalid_Argument
     }
 
