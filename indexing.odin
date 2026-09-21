@@ -1,12 +1,25 @@
 package omat
+import "core:math"
 
-unravel_index :: proc(idx: int, shape: [$N]int) -> (indices: [N]int) {
+unravel_index_col_major :: proc(idx: int, shape: [$N]int) -> (indices: [N]int) {
     assert(idx < math.prod(shape))
     idx := idx
     for s, d in shape {
         indices[d] = idx % s
         idx /= s
     }
+    return indices
+}
+
+unravel_index :: proc(idx: int, shape: [$N]int) -> (indices: [N]int) {
+    assert(idx < math.prod(shape))
+    idx := idx
+
+    for dim := N - 1; dim >= 0; dim -= 1 {
+        indices[dim] = idx % shape[dim]
+        idx /= shape[dim]
+    }
+
     return indices
 }
 
@@ -63,7 +76,11 @@ strides :: proc(shape: [$N]int) -> [N]int {
 
 @(require_results)
 reshape :: proc(t: Tensor($T, $N), shape: [$M]int) -> Tensor(T, M) {
-    assert(math.prod(shape) == math.prod(t.shape))
+    size : int = 1
+    for s in shape {
+        size *= s
+    }
+    assert(size == len(t.data))
     res := zeros(T, shape, t.allocator)
     copy(res.data, t.data)
     return res

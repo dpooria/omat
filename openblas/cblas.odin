@@ -206,7 +206,7 @@ foreign openblas_cblas {
     simatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: f32, a: [^]f32, lda: blasint, rda: blasint) ---
     dimatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: f64, a: [^]f64, lda: blasint, rda: blasint) ---
     cimatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: ^complex64, a: [^]complex64, lda: blasint, ldb: blasint) ---
-	zimatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: ^complex128, a: [^]complex128, lda: blasint, ldb: blasint) ---
+    zimatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: ^complex128, a: [^]complex128, lda: blasint, ldb: blasint) ---
 
     sgemm_batch :: proc(order: Order, TransA_array: [^]Transpose, TransB_array: [^]Transpose, M_array: [^]blasint, N_array: [^]blasint, K_array: [^]blasint, alpha_array: [^]f32, A_array: [^]^f32, lda_array: [^]blasint, B_array: [^]^f32, ldb_array: [^]blasint, beta_array: [^]f32, C_array: [^]^f32, ldc_array: [^]blasint, group_count: blasint, group_size: [^]blasint) ---
 
