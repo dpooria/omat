@@ -150,10 +150,10 @@ bdot_mv :: proc {
 }
 
 @(require_results)
-dot_mv_alpha_beta :: proc(
+dot_mv_alpha:: proc(
     A: Tensor($T, 2),
     x: Tensor(T, 1),
-    alpha, beta: T,
+    alpha: T,
     trans := ob.Transpose.NoTrans,
     allocator := context.allocator,
 ) -> Tensor(T, 1) {
@@ -165,20 +165,10 @@ dot_mv_alpha_beta :: proc(
         shape[0] = A.shape[1]
     }
     y := zeros(T, shape, allocator)
-    bdot_mv(A, x, &y, alpha, beta, trans)
+    bdot_mv(A, x, &y, alpha, trans)
     return y
 }
 
-@(require_results)
-dot_mv_alpha :: proc(
-    A: Tensor($T, 2),
-    x: Tensor(T, 1),
-    alpha: T,
-    trans := ob.Transpose.NoTrans,
-    allocator := context.allocator,
-) -> Tensor(T, 1) {
-    return dot_mv_alpha_beta(A, x, alpha, T(0), trans, allocator)
-}
 
 @(require_results)
 dot_mv_default :: proc(
@@ -187,14 +177,13 @@ dot_mv_default :: proc(
     trans := ob.Transpose.NoTrans,
     allocator := context.allocator,
 ) -> Tensor(T, 1) {
-    return dot_mv_alpha_beta(A, x, T(1), T(0), trans, allocator)
+    return dot_mv_alpha(A, x, T(1), trans, allocator)
 }
 
 @(require_results)
 dot_mv :: proc {
     dot_mv_default,
     dot_mv_alpha,
-    dot_mv_alpha_beta,
 }
 
 @(require_results)
@@ -297,7 +286,7 @@ bdot_mm_alpha_beta :: proc(
     } else when T == complex128 {
         alpha := alpha
         beta := beta
-        ob.cgemm(
+        ob.zgemm(
             .RowMajor,
             transA,
             transB,
@@ -346,10 +335,10 @@ bdot_mm :: proc {
 }
 
 @(require_results)
-dot_mm_alpha_beta :: proc(
+dot_mm_alpha :: proc(
     A: Tensor($T, 2),
     B: Tensor(T, 2),
-    alpha, beta: T,
+    alpha: T,
     transA := ob.Transpose.NoTrans,
     transB := ob.Transpose.NoTrans,
     allocator := context.allocator,
@@ -368,21 +357,10 @@ dot_mm_alpha_beta :: proc(
         shape[1] = B.shape[0]
     }
     C := zeros(T, shape, allocator)
-    bdot_mm(A, B, &C, alpha, beta, transA, transB)
+    bdot_mm(A, B, &C, alpha, transA, transB)
     return C
 }
 
-@(require_results)
-dot_mm_alpha :: proc(
-    A: Tensor($T, 2),
-    B: Tensor(T, 2),
-    alpha: T,
-    transA := ob.Transpose.NoTrans,
-    transB := ob.Transpose.NoTrans,
-    allocator := context.allocator,
-) -> Tensor(T, 2) {
-    return dot_mm_alpha_beta(A, B, alpha, T(0), transA, transB, allocator)
-}
 
 @(require_results)
 dot_mm_default :: proc(
@@ -392,14 +370,13 @@ dot_mm_default :: proc(
     transB := ob.Transpose.NoTrans,
     allocator := context.allocator,
 ) -> Tensor(T, 2) {
-    return dot_mm_alpha_beta(A, B, T(1), T(0), transA, transB, allocator)
+    return dot_mm_alpha(A, B, T(1), transA, transB, allocator)
 }
 
 @(require_results)
 dot_mm :: proc {
     dot_mm_default,
     dot_mm_alpha,
-    dot_mm_alpha_beta,
 }
 
 // interface

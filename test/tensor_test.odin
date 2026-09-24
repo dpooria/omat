@@ -12,7 +12,8 @@ tensor_create_copy_and_destroy :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(tensor.data), 6)
 
 	tensor.data[0] = 7
-	copy := om.tensor_copy(tensor)
+	copy, ok_copy := om.tensor_copy(tensor)
+	testing.expect(t, ok_copy)
 	testing.expect_value(t, copy.data[0], 7)
 
 	om.tensor_destroy(&copy)

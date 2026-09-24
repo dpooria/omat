@@ -1,5 +1,6 @@
 package omat
 
+import "base:builtin"
 import "base:intrinsics"
 import "core:math"
 import ob "openblas"
@@ -86,9 +87,11 @@ itranspose :: proc(t: ^Tensor($T, 2), op := ob.Transpose.Trans) {
     nrows := t.shape[0]
     ncols := t.shape[1]
     rda: ob.blasint
+    transposed: bool
     switch op {
     case .Trans, .ConjTrans:
         rda = ob.blasint(nrows)
+        transposed = true
     case .NoTrans, .ConjNoTrans:
         rda = ob.blasint(ncols)
     }
@@ -96,8 +99,8 @@ itranspose :: proc(t: ^Tensor($T, 2), op := ob.Transpose.Trans) {
         ob.simatcopy(
             .RowMajor,
             op,
-            ob.blasint(t.shape[0]),
-            ob.blasint(t.shape[1]),
+            ob.blasint(nrows),
+            ob.blasint(ncols),
             1.0,
             raw_data(t.data),
             ob.blasint(ncols),
@@ -107,8 +110,8 @@ itranspose :: proc(t: ^Tensor($T, 2), op := ob.Transpose.Trans) {
         ob.dimatcopy(
             .RowMajor,
             op,
-            ob.blasint(t.shape[0]),
-            ob.blasint(t.shape[1]),
+            ob.blasint(nrows),
+            ob.blasint(ncols),
             1.0,
             raw_data(t.data),
             ob.blasint(ncols),
@@ -119,8 +122,8 @@ itranspose :: proc(t: ^Tensor($T, 2), op := ob.Transpose.Trans) {
         ob.cimatcopy(
             .RowMajor,
             op,
-            ob.blasint(t.shape[0]),
-            ob.blasint(t.shape[1]),
+            ob.blasint(nrows),
+            ob.blasint(ncols),
             &alpha,
             raw_data(t.data),
             ob.blasint(ncols),
@@ -131,8 +134,8 @@ itranspose :: proc(t: ^Tensor($T, 2), op := ob.Transpose.Trans) {
         ob.zimatcopy(
             .RowMajor,
             op,
-            ob.blasint(t.shape[0]),
-            ob.blasint(t.shape[1]),
+            ob.blasint(nrows),
+            ob.blasint(ncols),
             &alpha,
             raw_data(t.data),
             ob.blasint(ncols),
@@ -141,8 +144,12 @@ itranspose :: proc(t: ^Tensor($T, 2), op := ob.Transpose.Trans) {
     } else {
         assert(false, "TODO!")
     }
+    if transposed {
+        t.shape = {ncols, nrows}
+    }
 }
 
+@(require_results)
 neg :: proc(t: Tensor($T, $N)) -> Tensor(T, N) {
     res := zeros(T, t.shape, t.allocator)
     for value, i in t.data {
@@ -159,6 +166,71 @@ ineg :: proc(t: ^Tensor($T, $N)) {
             value^ = -value^
         }
     }
+}
+
+
+@(require_results)
+abs :: proc(t: Tensor($T, $N)) -> Tensor(T, N) {
+    result := zeros(T, t.shape, t.allocator)
+    for i in 0 ..< len(t.data) {
+        result.data[i] = math.abs(t.data[i])
+
+    }
+    return result
+}
+
+iabs :: proc(t: ^Tensor($T, $N)) {
+    for i in 0 ..< len(t.data) {
+        t.data[i] = math.abs(t.data[i])
+    }
+}
+
+@(require_results)
+real_complex64 :: proc(t: Tensor(complex64, $N)) -> Tensor(f32, N) {
+    result := zeros(f32, t.shape, t.allocator)
+    for i in 0 ..< len(t.data) {
+        result.data[i] = builtin.real(t.data[i])
+    }
+    return result
+}
+
+@(require_results)
+real_complex128 :: proc(t: Tensor(complex128, $N)) -> Tensor(f64, N) {
+    result := zeros(f64, t.shape, t.allocator)
+    for i in 0 ..< len(t.data) {
+        result.data[i] = builtin.real(t.data[i])
+    }
+    return result
+}
+
+@(require_results)
+real :: proc {
+    real_complex64,
+    real_complex128,
+}
+
+@(require_results)
+imag_complex64 :: proc(t: Tensor(complex64, $N)) -> Tensor(f32, N) {
+    result := zeros(f32, t.shape, t.allocator)
+    for i in 0 ..< len(t.data) {
+        result.data[i] = builtin.imag(t.data[i])
+    }
+    return result
+}
+
+@(require_results)
+imag_complex128 :: proc(t: Tensor(complex128, $N)) -> Tensor(f64, N) {
+    result := zeros(f64, t.shape, t.allocator)
+    for i in 0 ..< len(t.data) {
+        result.data[i] = builtin.imag(t.data[i])
+    }
+    return result
+}
+
+@(require_results)
+imag :: proc {
+    imag_complex64,
+    imag_complex128,
 }
 
 // -- binary-ops ---

@@ -1,10 +1,10 @@
 package test
 
+import "core:fmt"
 import "core:testing"
 
 import om ".."
 import ob "../openblas"
-import "core:math"
 
 // vector-vector
 @(test)
@@ -97,16 +97,16 @@ f32_dot_mv :: proc(t: ^testing.T) {
     y := om.dot(a, x)
     defer om.tensor_destroy(&y)
     testing.expect_value(t, y.shape[0], 3)
-    testing.expect_value(t, om.at(y, 0)^, -3.0)
-    testing.expect_value(t, om.at(y, 1)^, 10.0)
-    testing.expect_value(t, om.at(y, 2)^, 12.0)
+    testing.expect_value(t, om.atv(y, 0), -3.0)
+    testing.expect_value(t, om.atv(y, 1), 10.0)
+    testing.expect_value(t, om.atv(y, 2), 12.0)
 
     y2 := om.dot_mv_alpha(a, x, 2.0)
     defer om.tensor_destroy(&y2)
     testing.expect_value(t, y2.shape[0], 3)
-    testing.expect_value(t, om.at(y2, 0)^, -6.0)
-    testing.expect_value(t, om.at(y2, 1)^, 20.0)
-    testing.expect_value(t, om.at(y2, 2)^, 24.0)
+    testing.expect_value(t, om.atv(y2, 0), -6.0)
+    testing.expect_value(t, om.atv(y2, 1), 20.0)
+    testing.expect_value(t, om.atv(y2, 2), 24.0)
 
     I := om.identity(f32, 6)
     defer om.tensor_destroy(&I)
@@ -145,16 +145,16 @@ f64_dot_mv :: proc(t: ^testing.T) {
     y := om.dot(a, x)
     defer om.tensor_destroy(&y)
     testing.expect_value(t, y.shape[0], 3)
-    testing.expect_value(t, om.at(y, 0)^, -3.0)
-    testing.expect_value(t, om.at(y, 1)^, 10.0)
-    testing.expect_value(t, om.at(y, 2)^, 12.0)
+    testing.expect_value(t, om.atv(y, 0), -3.0)
+    testing.expect_value(t, om.atv(y, 1), 10.0)
+    testing.expect_value(t, om.atv(y, 2), 12.0)
 
     y2 := om.dot_mv_alpha(a, x, 2.0)
     defer om.tensor_destroy(&y2)
     testing.expect_value(t, y2.shape[0], 3)
-    testing.expect_value(t, om.at(y2, 0)^, -6.0)
-    testing.expect_value(t, om.at(y2, 1)^, 20.0)
-    testing.expect_value(t, om.at(y2, 2)^, 24.0)
+    testing.expect_value(t, om.atv(y2, 0), -6.0)
+    testing.expect_value(t, om.atv(y2, 1), 20.0)
+    testing.expect_value(t, om.atv(y2, 2), 24.0)
 }
 
 @(test)
@@ -181,15 +181,15 @@ complex64_dot_mv :: proc(t: ^testing.T) {
     defer om.tensor_destroy(&y)
     // [-3.  +8.j , 14.8-15.6j, 12. +20.j ]
     testing.expect_value(t, y.shape[0], 3)
-    testing.expect_value(t, om.at(y, 0)^, -3.0 + 8.0i)
-    testing.expect_value(t, om.at(y, 1)^, 14.8 - 15.6i)
-    testing.expect_value(t, om.at(y, 2)^, 12.0 + 20.0i)
+    testing.expect_value(t, om.atv(y, 0), -3.0 + 8.0i)
+    testing.expect_value(t, om.atv(y, 1), 14.8 - 15.6i)
+    testing.expect_value(t, om.atv(y, 2), 12.0 + 20.0i)
 
     // [-6. -16.j , 10.4+40.8j, 24. -40.j ]
     om.bdot_mv_alpha(a, x, &y, 2.0, .ConjNoTrans)
-    testing.expect_value(t, om.at(y, 0)^, -6.0 - 16.0i)
-    testing.expect_value(t, om.at(y, 1)^, 10.4 + 40.8i)
-    testing.expect_value(t, om.at(y, 2)^, 24.0 - 40.0i)
+    testing.expect_value(t, om.atv(y, 0), -6.0 - 16.0i)
+    testing.expect_value(t, om.atv(y, 1), 10.4 + 40.8i)
+    testing.expect_value(t, om.atv(y, 2), 24.0 - 40.0i)
 
     I := om.identity(complex64, 6)
     defer om.tensor_destroy(&I)
@@ -229,15 +229,15 @@ complex128_dot_mv :: proc(t: ^testing.T) {
     defer om.tensor_destroy(&y)
     // [-3.  +8.j , 14.8-15.6j, 12. +20.j ]
     testing.expect_value(t, y.shape[0], 3)
-    testing.expect_value(t, om.at(y, 0)^, -3.0 + 8.0i)
-    testing.expect_value(t, om.at(y, 1)^, 14.8 - 15.6i)
-    testing.expect_value(t, om.at(y, 2)^, 12.0 + 20.0i)
+    testing.expect_value(t, om.atv(y, 0), -3.0 + 8.0i)
+    testing.expect_value(t, om.atv(y, 1), 14.8 - 15.6i)
+    testing.expect_value(t, om.atv(y, 2), 12.0 + 20.0i)
 
     // [-6. -16.j , 10.4+40.8j, 24. -40.j ]
     om.bdot_mv_alpha(a, x, &y, 2.0, .ConjNoTrans)
-    testing.expect_value(t, om.at(y, 0)^, -6.0 - 16.0i)
-    testing.expect_value(t, om.at(y, 1)^, 10.4 + 40.8i)
-    testing.expect_value(t, om.at(y, 2)^, 24.0 - 40.0i)
+    testing.expect_value(t, om.atv(y, 0), -6.0 - 16.0i)
+    testing.expect_value(t, om.atv(y, 1), 10.4 + 40.8i)
+    testing.expect_value(t, om.atv(y, 2), 24.0 - 40.0i)
 
     I := om.identity(complex128, 6)
     defer om.tensor_destroy(&I)
@@ -256,6 +256,7 @@ complex128_dot_mv :: proc(t: ^testing.T) {
 // matrix-matrix
 @(test)
 f32_dot_mm :: proc(t: ^testing.T) {
+    eps: f32 = 1e-5
     range := om.arange(f32, 0.0, 1.0, 0.1)
     A := om.reshape(range, [2]int{2, 5})
     B := om.dot_mm(A, A, transB = ob.Transpose.Trans)
@@ -266,31 +267,123 @@ f32_dot_mm :: proc(t: ^testing.T) {
         om.tensor_destroy(&B)
     }
     // [[0.3 , 0.8 ], [0.8 , 2.55]]
-    testing.expect(t, abs(om.at(B, 0, 0)^ - 0.30) < 1e-5)
-    testing.expect(t, abs(om.at(B, 0, 1)^ - 0.80) < 1e-5)
-    testing.expect(t, abs(om.at(B, 1, 0)^ - 0.80) < 1e-5)
-    testing.expect(t, abs(om.at(B, 1, 1)^ - 2.550) < 1e-5)
+    testing.expect(t, abs(om.atv(B, 0, 0) - 0.30) < eps)
+    testing.expect(t, abs(om.atv(B, 0, 1) - 0.80) < eps)
+    testing.expect(t, abs(om.atv(B, 1, 0) - 0.80) < eps)
+    testing.expect(t, abs(om.atv(B, 1, 1) - 2.550) < eps)
 }
 
 @(test)
 f64_dot_mm :: proc(t: ^testing.T) {
+    eps: f64 = 1e-12
     range := om.arange(f64, 0.0, 1.0, 0.1)
     A := om.reshape(range, [2]int{2, 5})
-    B := om.dot_mm(A, A, transB = ob.Transpose.Trans)
-
+    B := om.dot(A, A, transB = ob.Transpose.Trans)
     defer {
         om.tensor_destroy(&range)
         om.tensor_destroy(&A)
         om.tensor_destroy(&B)
     }
+
+    testing.expect_value(t, B.shape, [2]int{2, 2})
     // [[0.3 , 0.8 ], [0.8 , 2.55]]
-    testing.expect(t, abs(om.at(B, 0, 0)^ - 0.30) < 1e-5)
-    testing.expect(t, abs(om.at(B, 0, 1)^ - 0.80) < 1e-5)
-    testing.expect(t, abs(om.at(B, 1, 0)^ - 0.80) < 1e-5)
-    testing.expect(t, abs(om.at(B, 1, 1)^ - 2.550) < 1e-5)
+    testing.expect(t, abs(om.atv(B, 0, 0) - 0.30) < eps)
+    testing.expect(t, abs(om.atv(B, 0, 1) - 0.80) < eps)
+    testing.expect(t, abs(om.atv(B, 1, 0) - 0.80) < eps)
+    testing.expect(t, abs(om.atv(B, 1, 1) - 2.55) < eps)
+
+    om.ineg(&A)
+    C := om.dot_mm(A, B, alpha = 10.0, transA = ob.Transpose.Trans)
+    defer om.tensor_destroy(&C)
+    // [[ -4.  , -12.75], [ -5.1 , -16.1 ], [ -6.2 , -19.45], [ -7.3 , -22.8 ], [ -8.4 , -26.15]]
+    testing.expect_value(t, C.shape, [2]int{5, 2})
+    testing.expect(t, abs(om.atv(C, 0, 0) + 4.0) < eps)
+    testing.expect(t, abs(om.atv(C, 0, 1) + 12.75) < eps)
+    testing.expect(t, abs(om.atv(C, 1, 0) + 5.1) < eps)
+    testing.expect(t, abs(om.atv(C, 1, 1) + 16.1) < eps)
+    testing.expect(t, abs(om.atv(C, 2, 0) + 6.2) < eps)
+    testing.expect(t, abs(om.atv(C, 2, 1) + 19.45) < eps)
+    testing.expect(t, abs(om.atv(C, 3, 0) + 7.3) < eps)
+    testing.expect(t, abs(om.atv(C, 3, 1) + 22.8) < eps)
+    testing.expect(t, abs(om.atv(C, 4, 0) + 8.4) < eps)
+    testing.expect(t, abs(om.atv(C, 4, 1) + 26.15) < eps)
+
+    // 2 x 2 @ 2 x 5 = 2 x 5
+    om.itranspose(&C)
+    testing.expect_value(t, C.shape, [2]int{2, 5})
+    om.bdot_mm(B, A, &C, alpha = 12.0, beta = -2.0)
+    // [[ 3.2 ,  4.08,  4.96,  5.84,  6.72], [10.2 , 12.88, 15.56, 18.24, 20.92]]
+    testing.expect(t, abs(om.atv(C, 0, 0) - 3.2) < eps)
+    testing.expect(t, abs(om.atv(C, 0, 1) - 4.08) < eps)
+    testing.expect(t, abs(om.atv(C, 0, 2) - 4.96) < eps)
+    testing.expect(t, abs(om.atv(C, 0, 3) - 5.84) < eps)
+    testing.expect(t, abs(om.atv(C, 0, 4) - 6.72) < eps)
+    testing.expect(t, abs(om.atv(C, 1, 0) - 10.2) < eps)
+    testing.expect(t, abs(om.atv(C, 1, 1) - 12.88) < eps)
+    testing.expect(t, abs(om.atv(C, 1, 2) - 15.56) < eps)
+    testing.expect(t, abs(om.atv(C, 1, 3) - 18.24) < eps)
+    testing.expect(t, abs(om.atv(C, 1, 4) - 20.92) < eps)
 }
 
+@(test)
 complex64_dot_mm :: proc(t: ^testing.T) {
+    eps: f32 = 1e-6
+    A_real := om.ireshape(om.arange(f32, 0.0, 1.0, 0.1), [2]int{2, 5})
+    A_imag := om.ireshape(om.arange(f32, -1.0, 0.0, 0.1), [2]int{2, 5})
 
+    A := om.tensor_complex_from_parts(A_real, A_imag)
+    B := om.dot(A, A, transB = ob.Transpose.Trans)
+    //
+    defer {
+        om.tensor_destroy(&A_imag)
+        om.tensor_destroy(&A_real)
+        om.tensor_destroy(&A)
+        om.tensor_destroy(&B)
+    }
+
+    testing.expect_value(t, B.shape, [2]int{2, 2})
+    // [[-3. -1.4j, -0.5-2.9j], [-0.5-2.9j,  2. -1.9j]]
+    testing.expect(t, abs(om.atv(B, 0, 0) - complex(-3.0, -1.4)) < eps)
+    testing.expect(t, abs(om.atv(B, 0, 1) - complex(-0.5, -2.9)) < eps)
+    testing.expect(t, abs(om.atv(B, 1, 0) - complex(-0.5, -2.9)) < eps)
+    testing.expect(t, abs(om.atv(B, 1, 1) - complex(2.0, -1.9)) < eps)
+
+    om.bdot_mm(A, A, &B, transB = ob.Transpose.ConjTrans)
+    // [[3.6000001+1.847744e-08j, 2.1000001-2.500000e+00j], [2.1000001+2.500000e+00j, 3.1000001-4.619360e-09j]]
+    testing.expect(t, abs(om.atv(B, 0, 0) - complex(3.6, 0.0)) < eps)
+    testing.expect(t, abs(om.atv(B, 0, 1) - complex(2.1, -2.5)) < eps)
+    testing.expect(t, abs(om.atv(B, 1, 0) - complex(2.1, 2.5)) < eps)
+    testing.expect(t, abs(om.atv(B, 1, 1) - complex(3.1, 0.0)) < eps)
+}
+
+@(test)
+complex128_dot_mm :: proc(t: ^testing.T) {
+    eps: f64 = 1e-12
+    A_real := om.ireshape(om.arange(f64, 0.0, 1.0, 0.1), [2]int{2, 5})
+    A_imag := om.ireshape(om.arange(f64, -1.0, 0.0, 0.1), [2]int{2, 5})
+
+    A := om.tensor_complex_from_parts(A_real, A_imag)
+    B := om.dot(A, A, transB = ob.Transpose.Trans)
+    //
+    defer {
+        om.tensor_destroy(&A_imag)
+        om.tensor_destroy(&A_real)
+        om.tensor_destroy(&A)
+        om.tensor_destroy(&B)
+    }
+
+    testing.expect_value(t, B.shape, [2]int{2, 2})
+    // [[-3. -1.4j, -0.5-2.9j], [-0.5-2.9j,  2. -1.9j]]
+    testing.expect(t, abs(om.atv(B, 0, 0) - complex(-3.0, -1.4)) < eps)
+    testing.expect(t, abs(om.atv(B, 0, 1) - complex(-0.5, -2.9)) < eps)
+    testing.expect(t, abs(om.atv(B, 1, 0) - complex(-0.5, -2.9)) < eps)
+    testing.expect(t, abs(om.atv(B, 1, 1) - complex(2.0, -1.9)) < eps)
+
+    om.bdot_mm(A, A, &B, transB = ob.Transpose.ConjTrans)
+    // [[3.6000001+1.847744e-08j, 2.1000001-2.500000e+00j], [2.1000001+2.500000e+00j, 3.1000001-4.619360e-09j]]
+    testing.expect(t, abs(om.atv(B, 0, 0) - complex(3.6, 0.0)) < eps)
+    testing.expect(t, abs(om.atv(B, 0, 1) - complex(2.1, -2.5)) < eps)
+    testing.expect(t, abs(om.atv(B, 1, 0) - complex(2.1, 2.5)) < eps)
+    testing.expect(t, abs(om.atv(B, 1, 1) - complex(3.1, 0.0)) < eps)
 }
 

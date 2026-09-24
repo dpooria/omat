@@ -1,6 +1,5 @@
 package omat
 
-import "base:intrinsics"
 import "core:math"
 import "core:math/rand"
 import "core:slice"
@@ -88,7 +87,7 @@ random_uniform :: proc(
     result := zeros(f64, shape, allocator)
 
     for &value in result.data {
-        value^ = rand.float64_range(low, high, generator)
+        value = rand.float64_range(low, high, generator)
     }
 
     return result
@@ -105,7 +104,7 @@ random_normal :: proc(
     result := zeros(f64, shape, allocator)
 
     for &value in result.data {
-        value^ = rand.float64_normal(mean, stddev, generator)
+        value = rand.float64_normal(mean, stddev, generator)
     }
     return result
 }

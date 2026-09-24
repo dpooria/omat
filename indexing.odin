@@ -60,6 +60,60 @@ at :: proc {
     at_indices_arr,
 }
 
+atv_indices_arr :: proc(t: Tensor($T, $N), indices: [N]int) -> T {
+    offset := ravel_multi_index(indices, t.shape)
+    return t.data[offset]
+}
+
+atv_indices_int :: proc(t: Tensor($T, $N), indices: ..int) -> T {
+    offset := ravel_multi_index(indices, t.shape)
+    return t.data[offset]
+}
+
+atv :: proc {
+    atv_indices_int,
+    atv_indices_arr,
+}
+
+@(require_results)
+atax :: proc(t: Tensor($T, $N), index: int, axis: int = 0) -> Tensor(T, N - 1) where N > 1 {
+    assert(0 <= axis && axis < N)
+    assert(0 <= index && index < t.shape[axis])
+
+    shape: [N - 1]int
+    j := 0
+    for i in 0 ..< N {
+        if i == axis {
+            continue
+        }
+        shape[j] = t.shape[i]
+        j += 1
+    }
+
+    res := zeros(T, shape, t.allocator)
+
+    inner := 1
+    for i := axis + 1; i < N; i += 1 {
+        inner *= t.shape[i]
+    }
+
+    outer := len(res.data) / inner
+    source_stride := t.shape[axis] * inner
+
+    for i in 0 ..< outer {
+        source_start := i * source_stride + index * inner
+        result_start := i * inner
+
+        copy(
+            res.data[result_start:result_start + inner],
+            t.data[source_start:source_start + inner],
+        )
+    }
+
+    return res
+}
+
+
 strides :: proc(shape: [$N]int) -> [N]int {
     strides: [N]int
     strides[N - 1] = 1
@@ -76,13 +130,26 @@ strides :: proc(shape: [$N]int) -> [N]int {
 
 @(require_results)
 reshape :: proc(t: Tensor($T, $N), shape: [$M]int) -> Tensor(T, M) {
-    size : int = 1
+    size: int = 1
     for s in shape {
         size *= s
     }
     assert(size == len(t.data))
     res := zeros(T, shape, t.allocator)
     copy(res.data, t.data)
+    return res
+}
+
+// shared data reshape
+ireshape :: proc(t: Tensor($T, $N), shape: [$M]int) -> (res: Tensor(T, M)) {
+    size: int = 1
+    for s in shape {
+        size *= s
+    }
+    assert(size == len(t.data))
+    res.shape = shape
+    res.data = t.data
+    res.allocator = t.allocator
     return res
 }
 

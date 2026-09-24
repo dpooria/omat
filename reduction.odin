@@ -46,4 +46,4 @@ std :: proc(t: Tensor($T, $N)) -> T {
     return math.sqrt(var(t))
 }
 
-// TODO: clamp, abs
+// TODO: clamp
