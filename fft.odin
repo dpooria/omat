@@ -121,9 +121,16 @@ fft_plan :: proc(
     (A == complex128 && B == f64) ||
     (A == complex64 && B == f32) {
 
-    KIND :: FFTKind.C2C when intrinsics.type_is_complex(A) && intrinsics.type_is_complex(B) else (FFTKind.R2C when intrinsics.type_is_complex(B) else FFTKind.C2R)
+    KIND ::
+        FFTKind.C2C when intrinsics.type_is_complex(A) &&
+        intrinsics.type_is_complex(B) else (FFTKind.R2C when intrinsics.type_is_complex(
+                B,
+            ) else FFTKind.C2R)
     inverse, in_place := .Inverse in options, .In_Place in options
-    if (KIND == .R2C && inverse) || (KIND == .C2R && !inverse) || (KIND != .C2C && in_place) || (.Batched in options && N < 2) {
+    if (KIND == .R2C && inverse) ||
+       (KIND == .C2R && !inverse) ||
+       (KIND != .C2C && in_place) ||
+       (.Batched in options && N < 2) {
         return p, .Unsupported
     }
 
@@ -151,9 +158,40 @@ fft_plan :: proc(
     rank, many := c.int(N - first), c.int(howmany)
     when KIND == .C2C {
         sign := fftw.Sign.BACKWARD if inverse else fftw.Sign.FORWARD
-        p.handle = rawptr(plan_many(rank, &n[0], many, raw_data(scratch_in), nil, 1, c.int(idist), raw_data(scratch_out), nil, 1, c.int(odist), sign, flags))
+        p.handle = rawptr(
+            plan_many(
+                rank,
+                &n[0],
+                many,
+                raw_data(scratch_in),
+                nil,
+                1,
+                c.int(idist),
+                raw_data(scratch_out),
+                nil,
+                1,
+                c.int(odist),
+                sign,
+                flags,
+            ),
+        )
     } else {
-        p.handle = rawptr(plan_many(rank, &n[0], many, raw_data(scratch_in), nil, 1, c.int(idist), raw_data(scratch_out), nil, 1, c.int(odist), flags))
+        p.handle = rawptr(
+            plan_many(
+                rank,
+                &n[0],
+                many,
+                raw_data(scratch_in),
+                nil,
+                1,
+                c.int(idist),
+                raw_data(scratch_out),
+                nil,
+                1,
+                c.int(odist),
+                flags,
+            ),
+        )
     }
 
     p.scale = math.pow(f64(volume(shape[first:])), -norm_power[norm][int(inverse)])
@@ -172,9 +210,18 @@ fft_destroy :: proc(p: ^FFTPlan($A, $B, $N)) {
 // Runs the plan on any tensors of the planned shapes (the same tensor twice for In_Place).
 fft_execute :: proc(p: FFTPlan($A, $B, $N), input: Tensor(A, N), output: Tensor(B, N)) {
     src, dst := raw_data(input.data), raw_data(output.data)
-    assert(input.shape == p.in_shape && output.shape == p.out_shape, "fft_execute: tensor shapes do not match the plan")
-    assert((rawptr(src) == rawptr(dst)) == (.In_Place in p.options), "fft_execute: in-place-ness does not match the plan")
-    assert(.Unaligned in p.options || (aligned(src) && aligned(dst)), "fft_execute: unaligned tensors need a plan with .Unaligned")
+    assert(
+        input.shape == p.in_shape && output.shape == p.out_shape,
+        "fft_execute: tensor shapes do not match the plan",
+    )
+    assert(
+        (rawptr(src) == rawptr(dst)) == (.In_Place in p.options),
+        "fft_execute: in-place-ness does not match the plan",
+    )
+    assert(
+        .Unaligned in p.options || (aligned(src) && aligned(dst)),
+        "fft_execute: unaligned tensors need a plan with .Unaligned",
+    )
 
     when A == complex128 || B == complex128 {
         execute(fftw.plan(p.handle), src, dst)
@@ -193,9 +240,14 @@ fft_execute :: proc(p: FFTPlan($A, $B, $N), input: Tensor(A, N), output: Tensor(
 }
 
 // One-shot transforms into new tensors; of the options only .Batched applies.
-
 @(private = "file")
-transform :: proc($B: typeid, t: Tensor($A, $N), shape: [N]int, options: FFTOptions, norm: FFTNorm) -> Tensor(B, N) {
+transform :: proc(
+    $B: typeid,
+    t: Tensor($A, $N),
+    shape: [N]int,
+    options: FFTOptions,
+    norm: FFTNorm,
+) -> Tensor(B, N) {
     options := options
     if !aligned(raw_data(t.data)) do options += {.Unaligned}
     p, err := fft_plan(A, B, shape, options, norm)
@@ -207,17 +259,29 @@ transform :: proc($B: typeid, t: Tensor($A, $N), shape: [N]int, options: FFTOpti
 }
 
 @(require_results)
-fft_complex :: proc(t: Tensor($C, $N), options := FFTOptions{}, norm := FFTNorm.Backward) -> Tensor(C, N) where intrinsics.type_is_complex(C) {
+fft_complex :: proc(
+    t: Tensor($C, $N),
+    options := FFTOptions{},
+    norm := FFTNorm.Backward,
+) -> Tensor(C, N) where intrinsics.type_is_complex(C) {
     return transform(C, t, t.shape, options & {.Batched}, norm)
 }
 
 @(require_results)
-fft_f32 :: proc(t: Tensor(f32, $N), options := FFTOptions{}, norm := FFTNorm.Backward) -> Tensor(complex64, N) {
+fft_f32 :: proc(
+    t: Tensor(f32, $N),
+    options := FFTOptions{},
+    norm := FFTNorm.Backward,
+) -> Tensor(complex64, N) {
     return transform(complex64, t, t.shape, options & {.Batched}, norm)
 }
 
 @(require_results)
-fft_f64 :: proc(t: Tensor(f64, $N), options := FFTOptions{}, norm := FFTNorm.Backward) -> Tensor(complex128, N) {
+fft_f64 :: proc(
+    t: Tensor(f64, $N),
+    options := FFTOptions{},
+    norm := FFTNorm.Backward,
+) -> Tensor(complex128, N) {
     return transform(complex128, t, t.shape, options & {.Batched}, norm)
 }
 
@@ -229,7 +293,11 @@ fft :: proc {
 }
 
 @(require_results)
-ifft :: proc(t: Tensor($C, $N), options := FFTOptions{}, norm := FFTNorm.Backward) -> Tensor(C, N) where intrinsics.type_is_complex(C) {
+ifft :: proc(
+    t: Tensor($C, $N),
+    options := FFTOptions{},
+    norm := FFTNorm.Backward,
+) -> Tensor(C, N) where intrinsics.type_is_complex(C) {
     return transform(C, t, t.shape, (options & {.Batched}) + {.Inverse}, norm)
 }
 
@@ -245,7 +313,13 @@ irfft :: proc(
     shape[N - 1] = n if n > 0 else 2 * (shape[N - 1] - 1)
     tmp, _ := tensor_copy(t) // complex -> real destroys its input
     defer tensor_destroy(&tmp)
-    return transform(intrinsics.type_elem_type(C), tmp, shape, (options & {.Batched}) + {.Inverse}, norm)
+    return transform(
+        intrinsics.type_elem_type(C),
+        tmp,
+        shape,
+        (options & {.Batched}) + {.Inverse},
+        norm,
+    )
 }
 
 // Sample frequencies of an n-point fft with sample spacing d: [0, 1, ..., -2, -1] / (d * n)
@@ -255,3 +329,4 @@ fftfreq :: proc(n: int, d := 1.0, allocator := context.allocator) -> Tensor(f64,
     for i in 0 ..< n do t.data[i] = f64(i if i < (n + 1) / 2 else i - n) / (d * f64(n))
     return t
 }
+
