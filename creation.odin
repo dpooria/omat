@@ -1,5 +1,6 @@
 package omat
 
+import "base:intrinsics"
 import "core:math"
 import "core:math/rand"
 import "core:slice"
@@ -23,14 +24,24 @@ ones :: proc($T: typeid, shape: [$N]int, allocator := context.allocator) -> Tens
 identity :: proc($T: typeid, n: int, allocator := context.allocator) -> Tensor(T, 2) {
     t := zeros(T, [2]int{n, n}, allocator)
     for i in 0 ..< n {
-        a := at(t, i, i)
-        a^ = T(1)
+        at(t, i, i)^ = T(1)
     }
     return t
 }
 
+// square matrix with v on its diagonal
+@(require_results)
+diag :: proc(v: Tensor($T, 1), allocator := context.allocator) -> Tensor(T, 2) {
+    n := v.shape[0]
+    res := zeros(T, [2]int{n, n}, allocator)
+    assign(diagonal(res), v)
+    return res
+}
+
+// works on views too, e.g. zeroing a block
 fill :: proc(t: ^Tensor($T, $N), value: T) {
-    slice.fill(t.data, value)
+    value := value
+    assign(t^, broadcast(&value, t.shape))
 }
 
 @(require_results)
@@ -75,8 +86,6 @@ linspace :: proc(low: f64, high: f64, N: int, allocator := context.allocator) ->
     return res
 }
 
-// TODO: test random
-
 @(require_results)
 random_uniform :: proc(
     shape: [$N]int,
@@ -109,48 +118,46 @@ random_normal :: proc(
     return result
 }
 
+// uniform in [0, 1) for real types and for both parts of complex ones
 fill_randu :: proc(t: ^Tensor($T, $N), generator := context.random_generator) {
-    for &value in t.data {
-        when T == f32 {
-            value^ = rand.float32_range(0.0, 1.0, generator)
-        } else when T == f64 {
-            value^ = rand.float64_range(0.0, 1.0, generator)
-        } else when T == complex64 {
-            re := rand.float32_range(0.0, 1.0, generator)
-            im := rand.float32_range(0.0, 1.0, generator)
-            value^ = re + im * 1.0i
-        } else when T == complex128 {
-            re := rand.float64_range(0.0, 1.0, generator)
-            im := rand.float64_range(0.0, 1.0, generator)
-            value^ = re + im * 1.0i
-        } else when T == i32 {
-            value^ = rand.int32_range(0, 1, generator)
-        } else when T == i64 {
-            value^ = rand.int64_range(0, 1, generator)
-        } else {
-            #assert(false, "Not implemented!")
+    l := plan_loop(t.shape, t.strides)
+    step := loop_step(l, t.strides)
+    for r in 0 ..< l.rows {
+        p := row_offset(l, r, t.strides)
+        for k in 0 ..< l.n {
+            t.data[p + k * step] = random_value(T, false, generator)
         }
     }
 }
 
-// normal
+// standard normal for real types and for both parts of complex ones
 fill_randn :: proc(t: ^Tensor($T, $N), generator := context.random_generator) {
-    for &value in t.data {
-        when T == f32 {
-            value^ = rand.float32_normal(0.0, 1.0, generator)
-        } else when T == f64 {
-            value^ = rand.float64_normal(0.0, 1.0, generator)
-        } else when T == complex64 {
-            re := rand.float32_normal(0.0, 1.0, generator)
-            im := rand.float32_normal(0.0, 1.0, generator)
-            value^ = re + im * 1.0i
-        } else when T == complex128 {
-            re := rand.float64_normal(0.0, 1.0, generator)
-            im := rand.float64_normal(0.0, 1.0, generator)
-            value^ = re + im * 1.0i
-        } else {
-            #assert(false, "Not implemented!")
+    l := plan_loop(t.shape, t.strides)
+    step := loop_step(l, t.strides)
+    for r in 0 ..< l.rows {
+        p := row_offset(l, r, t.strides)
+        for k in 0 ..< l.n {
+            t.data[p + k * step] = random_value(T, true, generator)
         }
+    }
+}
+
+random_value :: proc($T: typeid, normal: bool, generator: rand.Generator) -> T {
+    when intrinsics.type_is_complex(T) {
+        R :: intrinsics.type_elem_type(T)
+        return complex(random_value(R, normal, generator), random_value(R, normal, generator))
+    } else when intrinsics.type_is_float(T) {
+        if normal {
+            return T(rand.float64_normal(0, 1, generator))
+        }
+        return T(rand.float64_range(0, 1, generator))
+    } else {
+        #assert(intrinsics.type_is_integer(T), "random_value: numeric types only")
+        // integers: 0 or 1 uniformly; normal draws are rounded
+        if normal {
+            return T(math.round(rand.float64_normal(0, 1, generator)))
+        }
+        return T(rand.int63_max(2, generator))
     }
 }
 

@@ -1,8 +1,7 @@
 package omat
-import "core:math"
 
 unravel_index_col_major :: proc(idx: int, shape: [$N]int) -> (indices: [N]int) {
-    assert(idx < math.prod(shape))
+    assert(idx < size_of_shape(shape))
     idx := idx
     for s, d in shape {
         indices[d] = idx % s
@@ -12,7 +11,7 @@ unravel_index_col_major :: proc(idx: int, shape: [$N]int) -> (indices: [N]int) {
 }
 
 unravel_index :: proc(idx: int, shape: [$N]int) -> (indices: [N]int) {
-    assert(idx < math.prod(shape))
+    assert(idx < size_of_shape(shape))
     idx := idx
 
     for dim := N - 1; dim >= 0; dim -= 1 {
@@ -46,13 +45,17 @@ ravel_multi_index :: proc {
 }
 
 at_indices_arr :: proc(t: Tensor($T, $N), indices: [N]int) -> ^T {
-    offset := ravel_multi_index(indices, t.shape)
-    return &t.data[offset]
+    for i, d in indices {
+        assert(0 <= i && i < t.shape[d], "at: index out of range")
+    }
+    return &t.data[ooffset_of(indices, t.strides)]
 }
 
 at_indices_int :: proc(t: Tensor($T, $N), indices: ..int) -> ^T {
-    offset := ravel_multi_index(indices, t.shape)
-    return &t.data[offset]
+    assert(len(indices) == N, "at: one index per axis")
+    index: [N]int
+    copy(index[:], indices)
+    return at_indices_arr(t, index)
 }
 
 at :: proc {
@@ -61,13 +64,11 @@ at :: proc {
 }
 
 atv_indices_arr :: proc(t: Tensor($T, $N), indices: [N]int) -> T {
-    offset := ravel_multi_index(indices, t.shape)
-    return t.data[offset]
+    return at_indices_arr(t, indices)^
 }
 
 atv_indices_int :: proc(t: Tensor($T, $N), indices: ..int) -> T {
-    offset := ravel_multi_index(indices, t.shape)
-    return t.data[offset]
+    return at_indices_int(t, ..indices)^
 }
 
 atv :: proc {
@@ -75,81 +76,75 @@ atv :: proc {
     atv_indices_arr,
 }
 
+// A copy of t[..., index, ...] along axis
 @(require_results)
 atax :: proc(t: Tensor($T, $N), index: int, axis: int = 0) -> Tensor(T, N - 1) where N > 1 {
     assert(0 <= axis && axis < N)
-    assert(0 <= index && index < t.shape[axis])
-
-    shape: [N - 1]int
-    j := 0
-    for i in 0 ..< N {
-        if i == axis {
-            continue
+    // bring axis to the front, then take its row
+    axes: [N]int
+    axes[0] = axis
+    next := 1
+    for d in 0 ..< N {
+        if d != axis {
+            axes[next] = d
+            next += 1
         }
-        shape[j] = t.shape[i]
-        j += 1
     }
-
-    res := zeros(T, shape, t.allocator)
-
-    inner := 1
-    for i := axis + 1; i < N; i += 1 {
-        inner *= t.shape[i]
-    }
-
-    outer := len(res.data) / inner
-    source_stride := t.shape[axis] * inner
-
-    for i in 0 ..< outer {
-        source_start := i * source_stride + index * inner
-        result_start := i * inner
-
-        copy(
-            res.data[result_start:result_start + inner],
-            t.data[source_start:source_start + inner],
-        )
-    }
-
-    return res
+    return tensor_copy(view_row(permute_view(t, axes[:]), index), t.allocator)
 }
 
 
+// row-major strides of a contiguous tensor of this shape
 strides :: proc(shape: [$N]int) -> [N]int {
     strides: [N]int
-    strides[N - 1] = 1
-
-    when N > 1 {
-        for dim := N - 2; dim >= 0; dim -= 1 {
-            strides[dim] = strides[dim + 1] * shape[dim + 1]
-        }
+    step := 1
+    for dim := N - 1; dim >= 0; dim -= 1 {
+        strides[dim] = step
+        step *= shape[dim]
     }
-
     return strides
 }
 
 
+// A contiguous copy of t with a new shape of the same size, elements in row-major order
 @(require_results)
 reshape :: proc(t: Tensor($T, $N), shape: [$M]int) -> Tensor(T, M) {
-    size: int = 1
-    for s in shape {
-        size *= s
-    }
-    assert(size == len(t.data))
+    assert(size_of_shape(shape) == size_of_shape(t.shape), "reshape: sizes differ")
     res := zeros(T, shape, t.allocator)
-    copy(res.data, t.data)
+    // res's memory seen in t's shape, so one strided pass copies in row-major order
+    as_t := Tensor(T, N) {
+        data     = res.data,
+        shape    = t.shape,
+        strides  = strides(t.shape),
+        borrowed = true,
+    }
+    assign(as_t, t)
     return res
 }
 
-// shared data reshape
-ireshape :: proc(t: Tensor($T, $N), shape: [$M]int) -> (res: Tensor(T, M)) {
-    size: int = 1
-    for s in shape {
-        size *= s
+// The same tensor under a new shape, sharing the data and its ownership: destroy one of the two.
+// Needs contiguous data; reshape copies any view.
+ireshape :: proc(t: Tensor($T, $N), shape: [$M]int) -> Tensor(T, M) {
+    assert(size_of_shape(shape) == size_of_shape(t.shape), "ireshape: sizes differ")
+    assert_contiguous(t)
+    return Tensor(T, M) {
+        allocator = t.allocator,
+        data = t.data,
+        shape = shape,
+        strides = strides(shape),
+        borrowed = t.borrowed,
     }
-    assert(size == len(t.data))
-    res.shape = shape
-    res.data = t.data
-    res.allocator = t.allocator
-    return res
+}
+
+
+// Axis i of the result is axis axes[i] of t, as numpy's transpose(t, axes)
+@(require_results)
+permute_axes :: proc(
+    t: Tensor($T, $N),
+    axes: []int,
+    allocator := context.allocator,
+) -> Tensor(T, N) where N >
+    0 {
+    return tensor_copy(permute_view(t, axes), allocator)
 }
 

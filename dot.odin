@@ -1,40 +1,59 @@
 package omat
 
+import "base:builtin"
+import "base:intrinsics"
+
 import ob "openblas"
+
+// op without conjugation for real types, where BLAS may reject the conjugating ones
+real_op :: proc($T: typeid, op: ob.Transpose) -> ob.Transpose {
+    when intrinsics.type_is_complex(T) {
+        return op
+    } else {
+        return .Trans if op == .Trans || op == .ConjTrans else .NoTrans
+    }
+}
+
+// How BLAS reads a matrix or view A under op: the leading dimension of its row-major storage and
+// the op to use on it. A transposed view (adjacent rows) is its row-major original under the
+// transposed op; flipped tells which, since gemv wants the stored shape.
+blas_matrix :: proc(
+    A: Tensor($T, 2),
+    op: ob.Transpose,
+) -> (
+    ld: ob.blasint,
+    blas_op: ob.Transpose,
+    flipped: bool,
+) {
+    if A.strides[1] == 1 || A.shape[1] <= 1 {
+        return ob.blasint(builtin.max(A.strides[0], A.shape[1], 1)), op, false
+    }
+    assert(A.strides[0] == 1 || A.shape[0] <= 1, "dot: a matrix needs adjacent rows or columns")
+    transposed := [ob.Transpose]ob.Transpose {
+        .NoTrans     = .Trans,
+        .Trans       = .NoTrans,
+        .ConjTrans   = .ConjNoTrans,
+        .ConjNoTrans = .ConjTrans,
+    }
+    return ob.blasint(builtin.max(A.strides[1], A.shape[0], 1)), transposed[op], true
+}
 
 // vector-vector
 
+// x^T y, or x^H y with conjugate
 dot_vv :: proc(x: Tensor($T, 1), y: Tensor(T, 1), conjugate := false) -> T {
-    size := len(x.data)
-    assert(size == len(y.data))
-    n := ob.blasint(size)
-
-    when T == f32 {
-        return ob.sdot(n, raw_data(x.data), 1, raw_data(y.data), 1)
-
-    } else when T == f64 {
-        return ob.ddot(n, raw_data(x.data), 1, raw_data(y.data), 1)
-
-    } else when T == complex64 {
-        if conjugate {
-            return ob.cdotc(n, raw_data(x.data), 1, raw_data(y.data), 1)
-        } else {
-            return ob.cdotu(n, raw_data(x.data), 1, raw_data(y.data), 1)
-        }
-
-    } else when T == complex128 {
-        if conjugate {
-            return ob.zdotc(n, raw_data(x.data), 1, raw_data(y.data), 1)
-        } else {
-            return ob.zdotu(n, raw_data(x.data), 1, raw_data(y.data), 1)
-        }
-    } else {
-        assert(false, "TODO!")
+    assert(x.shape == y.shape)
+    n := ob.blasint(x.shape[0])
+    incx, incy := ob.blasint(x.strides[0]), ob.blasint(y.strides[0])
+    if conjugate {
+        return ob.dotc(n, raw_data(x.data), incx, raw_data(y.data), incy)
     }
+    return ob.dotu(n, raw_data(x.data), incx, raw_data(y.data), incy)
 }
 
 // matrix-vector
 
+// y = alpha op(A) x + beta y; A, x and y may be views
 bdot_mv_alpha_beta :: proc(
     A: Tensor($T, 2),
     x: Tensor(T, 1),
@@ -42,86 +61,31 @@ bdot_mv_alpha_beta :: proc(
     alpha, beta: T,
     trans := ob.Transpose.NoTrans,
 ) {
-    n := ob.blasint(x.shape[0])
-    m := ob.blasint(y.shape[0])
     switch trans {
     case .NoTrans, .ConjNoTrans:
-        assert(m == ob.blasint(A.shape[0]))
-        assert(n == ob.blasint(A.shape[1]))
+        assert(x.shape[0] == A.shape[1] && y.shape[0] == A.shape[0])
     case .Trans, .ConjTrans:
-        assert(m == ob.blasint(A.shape[1]))
-        assert(n == ob.blasint(A.shape[0]))
+        assert(x.shape[0] == A.shape[0] && y.shape[0] == A.shape[1])
     }
-
-    when T == f32 {
-        ob.sgemv(
-            .RowMajor,
-            trans,
-            m,
-            n,
-            alpha,
-            raw_data(A.data),
-            n,
-            raw_data(x.data),
-            1,
-            beta,
-            raw_data(y.data),
-            1,
-        )
-
-    } else when T == f64 {
-        ob.dgemv(
-            .RowMajor,
-            trans,
-            m,
-            n,
-            alpha,
-            raw_data(A.data),
-            n,
-            raw_data(x.data),
-            1,
-            beta,
-            raw_data(y.data),
-            1,
-        )
-
-    } else when T == complex64 {
-        alpha := alpha
-        beta := beta
-        ob.cgemv(
-            .RowMajor,
-            trans,
-            m,
-            n,
-            &alpha,
-            raw_data(A.data),
-            n,
-            raw_data(x.data),
-            1,
-            &beta,
-            raw_data(y.data),
-            1,
-        )
-    } else when T == complex128 {
-        alpha := alpha
-        beta := beta
-        ob.zgemv(
-            .RowMajor,
-            trans,
-            m,
-            n,
-            &alpha,
-            raw_data(A.data),
-            n,
-            raw_data(x.data),
-            1,
-            &beta,
-            raw_data(y.data),
-            1,
-        )
-    } else {
-        assert(false, "TODO!")
+    lda, op, flipped := blas_matrix(A, real_op(T, trans))
+    m, n := A.shape[0], A.shape[1]
+    if flipped {
+        m, n = n, m
     }
+    ob.gemv(
+        .RowMajor,
+        op,
+        ob.blasint(m),
+        ob.blasint(n),
+        alpha,
+        raw_data(A.data),
+        lda,
+        raw_data(x.data),
+        ob.blasint(x.strides[0]),
+        beta,
+        raw_data(y.data),
+        ob.blasint(y.strides[0]),
+    )
 }
 
 bdot_mv_alpha :: proc(
@@ -150,7 +114,7 @@ bdot_mv :: proc {
 }
 
 @(require_results)
-dot_mv_alpha:: proc(
+dot_mv_alpha :: proc(
     A: Tensor($T, 2),
     x: Tensor(T, 1),
     alpha: T,
@@ -168,7 +132,6 @@ dot_mv_alpha:: proc(
     bdot_mv(A, x, &y, alpha, trans)
     return y
 }
-
 
 @(require_results)
 dot_mv_default :: proc(
@@ -193,11 +156,33 @@ dot_vm_default :: proc(
     allocator := context.allocator,
 ) -> Tensor(T, 1) {
     return dot_mv_default(a, x, ob.Transpose.Trans, allocator)
-
 }
 
 // matrix-matrix
 
+// op(A) op(B) is A A^H or A^H A when both are the same matrix (Trans counts as ConjTrans for
+// real types); herk then computes one triangle, half the work of gemm.
+is_gram_product :: proc(
+    A, B: Tensor($T, 2),
+    transA, transB: ob.Transpose,
+) -> (
+    gram: bool,
+    trans: ob.Transpose,
+) {
+    if raw_data(A.data) != raw_data(B.data) || A.shape != B.shape || A.strides != B.strides {
+        return false, .NoTrans
+    }
+    adjoint := ob.Transpose.Trans if !intrinsics.type_is_complex(T) else .ConjTrans
+    if transA == .NoTrans && (transB == .ConjTrans || transB == adjoint) {
+        return true, .NoTrans
+    }
+    if (transA == .ConjTrans || transA == adjoint) && transB == .NoTrans {
+        return true, adjoint
+    }
+    return false, .NoTrans
+}
+
+// C = alpha op(A) op(B) + beta C; A, B and C may be views, C with adjacent columns
 bdot_mm_alpha_beta :: proc(
     A: Tensor($T, 2),
     B: Tensor(T, 2),
@@ -208,103 +193,68 @@ bdot_mm_alpha_beta :: proc(
 ) {
     M := ob.blasint(C.shape[0])
     N := ob.blasint(C.shape[1])
-    ldc := N
-    K, lda, ldb: ob.blasint
+    K: ob.blasint
     switch transA {
     case .NoTrans, .ConjNoTrans:
         assert(M == ob.blasint(A.shape[0]))
         K = ob.blasint(A.shape[1])
-        lda = K
     case .Trans, .ConjTrans:
         assert(M == ob.blasint(A.shape[1]))
         K = ob.blasint(A.shape[0])
-        lda = M
     }
     switch transB {
     case .NoTrans, .ConjNoTrans:
         assert(N == ob.blasint(B.shape[1]))
         assert(K == ob.blasint(B.shape[0]))
-        ldb = N
     case .Trans, .ConjTrans:
         assert(N == ob.blasint(B.shape[0]))
         assert(K == ob.blasint(B.shape[1]))
-        ldb = K
     }
-    when T == f32 {
-        ob.sgemm(
+    lda, opA, _ := blas_matrix(A, real_op(T, transA))
+    ldb, opB, _ := blas_matrix(B, real_op(T, transB))
+    ldc := ob.blasint(leading_dimension(C^))
+
+    // herk needs real alpha and, since it writes one triangle, beta = 0
+    gram, trans := is_gram_product(A, B, opA, opB)
+    if gram && beta == 0 && conjugate(alpha) == alpha {
+        when intrinsics.type_is_complex(T) {
+            real_alpha := builtin.real(alpha)
+        } else {
+            real_alpha := alpha
+        }
+        ob.herk(
             .RowMajor,
-            transA,
-            transB,
+            .Upper,
+            trans,
             M,
-            N,
             K,
-            alpha,
+            real_alpha,
             raw_data(A.data),
             lda,
-            raw_data(B.data),
-            ldb,
-            beta,
+            0,
             raw_data(C.data),
             ldc,
         )
-    } else when T == f64 {
-        ob.dgemm(
-            .RowMajor,
-            transA,
-            transB,
-            M,
-            N,
-            K,
-            alpha,
-            raw_data(A.data),
-            lda,
-            raw_data(B.data),
-            ldb,
-            beta,
-            raw_data(C.data),
-            ldc,
-        )
-    } else when T == complex64 {
-        alpha := alpha
-        beta := beta
-        ob.cgemm(
-            .RowMajor,
-            transA,
-            transB,
-            M,
-            N,
-            K,
-            &alpha,
-            raw_data(A.data),
-            lda,
-            raw_data(B.data),
-            ldb,
-            &beta,
-            raw_data(C.data),
-            ldc,
-        )
-    } else when T == complex128 {
-        alpha := alpha
-        beta := beta
-        ob.zgemm(
-            .RowMajor,
-            transA,
-            transB,
-            M,
-            N,
-            K,
-            &alpha,
-            raw_data(A.data),
-            lda,
-            raw_data(B.data),
-            ldb,
-            &beta,
-            raw_data(C.data),
-            ldc,
-        )
-    } else {
-        assert(false, "TODO")
+        fill_hermitian(C, from = .Upper)
+        return
     }
+
+    ob.gemm(
+        .RowMajor,
+        opA,
+        opB,
+        M,
+        N,
+        K,
+        alpha,
+        raw_data(A.data),
+        lda,
+        raw_data(B.data),
+        ldb,
+        beta,
+        raw_data(C.data),
+        ldc,
+    )
 }
 
 bdot_mm_alpha :: proc(
@@ -360,7 +310,6 @@ dot_mm_alpha :: proc(
     bdot_mm(A, B, &C, alpha, transA, transB)
     return C
 }
-
 
 @(require_results)
 dot_mm_default :: proc(

@@ -25,7 +25,7 @@ atax_rank3 :: proc(t: ^testing.T) {
 
     for i in 0 ..< a.shape[1] {
         for j in 0 ..< a.shape[2] {
-			testing.expect_value(t, om.atv(a, 0, i, j), om.atv(a_at0, i, j))
+            testing.expect_value(t, om.atv(a, 0, i, j), om.atv(a_at0, i, j))
         }
     }
 
@@ -33,7 +33,7 @@ atax_rank3 :: proc(t: ^testing.T) {
     defer om.tensor_destroy(&a_at2)
     for i in 0 ..< a.shape[0] {
         for j in 0 ..< a.shape[1] {
-			testing.expect_value(t, om.atv(a, i, j, 1), om.atv(a_at2, i, j))
+            testing.expect_value(t, om.atv(a, i, j, 1), om.atv(a_at2, i, j))
         }
     }
 

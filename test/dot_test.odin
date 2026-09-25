@@ -1,6 +1,5 @@
 package test
 
-import "core:fmt"
 import "core:testing"
 
 import om ".."
@@ -385,5 +384,51 @@ complex128_dot_mm :: proc(t: ^testing.T) {
     testing.expect(t, abs(om.atv(B, 0, 1) - complex(2.1, -2.5)) < eps)
     testing.expect(t, abs(om.atv(B, 1, 0) - complex(2.1, 2.5)) < eps)
     testing.expect(t, abs(om.atv(B, 1, 1) - complex(3.1, 0.0)) < eps)
+}
+
+
+// gemv with a transposed non-square matrix
+@(test)
+f64_dot_vm_nonsquare :: proc(t: ^testing.T) {
+    a := om.zeros(f64, [2]int{3, 2})
+    defer om.tensor_destroy(&a)
+    copy(a.data, []f64{1, 2, 3, 4, 5, 6})
+    x := om.ones(f64, [1]int{3})
+    defer om.tensor_destroy(&x)
+
+    y := om.dot(x, a)
+    defer om.tensor_destroy(&y)
+    testing.expect_value(t, y.shape[0], 2)
+    testing.expect_value(t, y.data[0], 9.0)
+    testing.expect_value(t, y.data[1], 12.0)
+}
+
+// A A^H and A^H A of one tensor go through herk; a copy of A takes the gemm path
+@(test)
+dot_gram_product :: proc(t: ^testing.T) {
+    check :: proc(t: ^testing.T, A: om.Tensor($T, 2), transA, transB: ob.Transpose) {
+        B := om.tensor_copy(A)
+        defer om.tensor_destroy(&B)
+        fast := om.dot(A, A, transA, transB)
+        defer om.tensor_destroy(&fast)
+        slow := om.dot(A, B, transA, transB)
+        defer om.tensor_destroy(&slow)
+        testing.expect_value(t, fast.shape, slow.shape)
+        for x, i in fast.data {
+            testing.expect(t, abs(x - slow.data[i]) < 1e-12)
+        }
+    }
+
+    Z := om.zeros(complex128, [2]int{3, 5})
+    defer om.tensor_destroy(&Z)
+    om.fill_randn(&Z)
+    check(t, Z, .NoTrans, .ConjTrans)
+    check(t, Z, .ConjTrans, .NoTrans)
+
+    R := om.zeros(f64, [2]int{4, 2})
+    defer om.tensor_destroy(&R)
+    om.fill_randn(&R)
+    check(t, R, .NoTrans, .Trans)
+    check(t, R, .Trans, .NoTrans)
 }
 

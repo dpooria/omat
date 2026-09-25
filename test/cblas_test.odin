@@ -17,3 +17,4 @@ cblas_ddot :: proc(t: ^testing.T) {
     res := ob.ddot(ob.blasint(N), raw_data(x.data), 1, raw_data(y.data), 1)
     testing.expect(t, abs(res - 32.0) < 1e-12)
 }
+

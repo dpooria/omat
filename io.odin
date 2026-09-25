@@ -297,6 +297,13 @@ read_npy :: proc(
     return data, parsed_shape, nil
 }
 
+// t, a tensor or view, as a .npy file that numpy and load read back
+save :: proc(t: Tensor($T, $N), path: string) -> os.Error {
+    c := contiguous(t)
+    defer tensor_destroy(&c)
+    return write_npy(path, c.data, c.shape)
+}
+
 load :: proc(t: ^Tensor($T, $N), path: string, allocator := context.allocator) -> (ok: bool) {
     if t.allocator.procedure == nil {
         t.allocator = allocator
@@ -311,6 +318,7 @@ load :: proc(t: ^Tensor($T, $N), path: string, allocator := context.allocator) -
 
     t.data = data
     t.shape = shape
+    t.strides = strides(shape)
     return
 }
 
@@ -342,7 +350,7 @@ print_dimension :: proc(
 }
 
 print :: proc(t: Tensor($T, $N), format: string = "%v", f := os.stdout) {
-    strides := strides(t.shape)
+    strides := t.strides // prints views as they are
     shape := t.shape
 
     print_dimension(t.data, shape[:], strides[:], 0, 0, format, f)

@@ -13,7 +13,17 @@ lapacke_lu_solve :: proc(t: ^testing.T) {
     info := ob.dgetrf(.RowMajor, 2, 2, raw_data(a[:]), 2, raw_data(ipiv[:]))
     testing.expect_value(t, info, 0)
 
-    info = ob.dgetrs(.RowMajor, .NoTrans, 2, 1, raw_data(a[:]), 2, raw_data(ipiv[:]), raw_data(b[:]), 1)
+    info = ob.dgetrs(
+        .RowMajor,
+        .NoTrans,
+        2,
+        1,
+        raw_data(a[:]),
+        2,
+        raw_data(ipiv[:]),
+        raw_data(b[:]),
+        1,
+    )
     testing.expect_value(t, info, 0)
     testing.expect(t, abs(b[0] - 2.0) < 1e-12)
     testing.expect(t, abs(b[1] - 3.0) < 1e-12)
@@ -51,3 +61,4 @@ lapacke_explicit_q :: proc(t: ^testing.T) {
     testing.expect(t, abs(q1_q1 - 1.0) < 1e-12)
     testing.expect(t, abs(q0_q1) < 1e-12)
 }
+

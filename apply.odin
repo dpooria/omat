@@ -1,17 +1,39 @@
 package omat
 
-// ----- inplace -----
-iapply_ctx :: proc(t: ^Tensor($T, $N), func: proc(x: T) -> T) {
-    for i in 0 ..< len(t.data) {
-        t.data[i] = func(t.data[i])
+// f applied to every element of a tensor or view. apply and iapply take procedures with context,
+// apply_ctxless and iapply_ctxless those without, such as core:math's; the typed signatures let
+// proc groups like math.exp pick their overload.
+
+// t[i] = f(t[i]) for any procedure f, over any strides
+iapply_generic :: proc(t: ^Tensor($T, $N), f: $F) {
+    l := plan_loop(t.shape, t.strides)
+    step := loop_step(l, t.strides)
+    for r in 0 ..< l.rows {
+        p := row_offset(l, r, t.strides)
+        for k in 0 ..< l.n {
+            t.data[p + k * step] = f(t.data[p + k * step])
+        }
     }
 }
 
-iapply_ctx_1arg :: proc(t: ^Tensor($T, $N), func: proc(x: T, arg: T) -> T, arg: T) {
-
-    for value, i in t.data {
-        t.data[i] = func(value, arg)
+// t[i] = f(t[i], arg) for any procedure f, over any strides
+iapply_generic_arg :: proc(t: ^Tensor($T, $N), f: $F, arg: T) {
+    l := plan_loop(t.shape, t.strides)
+    step := loop_step(l, t.strides)
+    for r in 0 ..< l.rows {
+        p := row_offset(l, r, t.strides)
+        for k in 0 ..< l.n {
+            t.data[p + k * step] = f(t.data[p + k * step], arg)
+        }
     }
+}
+
+iapply_ctx :: proc(t: ^Tensor($T, $N), f: proc(x: T) -> T) {
+    iapply_generic(t, f)
+}
+
+iapply_ctx_1arg :: proc(t: ^Tensor($T, $N), f: proc(x: T, arg: T) -> T, arg: T) {
+    iapply_generic_arg(t, f, arg)
 }
 
 iapply :: proc {
@@ -19,29 +41,18 @@ iapply :: proc {
     iapply_ctx_1arg,
 }
 
-// ----- copy -----
 @(require_results)
-apply_ctx :: proc(t: Tensor($T, $N), func: proc(x: T) -> T) -> Tensor(T, N) {
-    result, ok := tensor_create(T, t.shape, t.allocator)
-    if !ok {
-        return result
-    }
-    for value, i in t.data {
-        result.data[i] = func(value)
-    }
-    return result
+apply_ctx :: proc(t: Tensor($T, $N), f: proc(x: T) -> T) -> Tensor(T, N) {
+    res := tensor_copy(t, t.allocator)
+    iapply_generic(&res, f)
+    return res
 }
 
 @(require_results)
-apply_ctx_1arg :: proc(t: Tensor($T, $N), func: proc(x: T, arg: T) -> T, arg: T) -> Tensor(T, N) {
-    result, ok := tensor_create(T, t.shape, t.allocator)
-    if !ok {
-        return result
-    }
-    for value, i in t.data {
-        result.data[i] = func(value, arg)
-    }
-    return result
+apply_ctx_1arg :: proc(t: Tensor($T, $N), f: proc(x: T, arg: T) -> T, arg: T) -> Tensor(T, N) {
+    res := tensor_copy(t, t.allocator)
+    iapply_generic_arg(&res, f, arg)
+    return res
 }
 
 apply :: proc {
@@ -49,23 +60,16 @@ apply :: proc {
     apply_ctx_1arg,
 }
 
-// ----- math and foreign functions --------
-// ------- inplace ---------
-iapply_ctxless_noargs :: proc(t: ^Tensor($T, $N), func: proc "contextless" (x: T) -> T) {
-    for i in 0 ..< len(t.data) {
-        t.data[i] = func(t.data[i])
-    }
+iapply_ctxless_noargs :: proc(t: ^Tensor($T, $N), f: proc "contextless" (x: T) -> T) {
+    iapply_generic(t, f)
 }
-
 
 iapply_ctxless_1arg :: proc(
     t: ^Tensor($T, $N),
-    func: proc "contextless" (x: T, arg: T) -> T,
+    f: proc "contextless" (x: T, arg: T) -> T,
     arg: T,
 ) {
-    for value, i in t.data {
-        t.data[i] = func(value, arg)
-    }
+    iapply_generic_arg(t, f, arg)
 }
 
 iapply_ctxless :: proc {
@@ -73,33 +77,26 @@ iapply_ctxless :: proc {
     iapply_ctxless_1arg,
 }
 
-// ------- copy -----------
 @(require_results)
 apply_ctxless_noargs :: proc(
     t: Tensor($T, $N),
-    func: proc "contextless" (x: T) -> T,
+    f: proc "contextless" (x: T) -> T,
 ) -> Tensor(T, N) {
-    result, ok := tensor_create(T, t.shape, t.allocator)
-    assert(ok)
-    for value, i in t.data {
-        result.data[i] = func(value)
-    }
-    return result
+    res := tensor_copy(t, t.allocator)
+    iapply_generic(&res, f)
+    return res
 }
 
+@(require_results)
 apply_ctxless_1arg :: proc(
     t: Tensor($T, $N),
-    func: proc "contextless" (x: T, arg: T) -> T,
+    f: proc "contextless" (x: T, arg: T) -> T,
     arg: T,
 ) -> Tensor(T, N) {
-    result, ok := tensor_create(T, t.shape, t.allocator)
-    assert(ok)
-    for value, i in t.data {
-        result.data[i] = func(value, arg)
-    }
-    return result
+    res := tensor_copy(t, t.allocator)
+    iapply_generic_arg(&res, f, arg)
+    return res
 }
-
 
 apply_ctxless :: proc {
     apply_ctxless_noargs,

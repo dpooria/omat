@@ -4,7 +4,6 @@ import "core:c"
 
 // Raw FFTW 3 bindings without the fftw_ prefix: plan_dft is fftw_plan_dft (f64),
 // f_plan_dft is fftwf_plan_dft (f32). Constants and enum members drop the FFTW_ prefix.
-// FFTW is GPL: programs distributed linked against it fall under the GPL.
 
 foreign import fftw3 "system:fftw3"
 foreign import fftw3f "system:fftw3f"
@@ -172,7 +171,7 @@ foreign fftw3f {
     f_print_plan :: proc(p: f_plan) ---
     f_flops :: proc(p: f_plan, add, mul, fmas: ^f64) ---
     f_cost :: proc(p: f_plan) -> f64 ---
-    f_version: c.char // const char[], use cstring(&f_version)
+    f_version: c.char 
 }
 
 // Call init_threads once; plan_with_nthreads applies to plans created afterwards.
@@ -192,4 +191,29 @@ foreign fftw3f_threads {
     f_planner_nthreads :: proc() -> c.int ---
     f_cleanup_threads :: proc() ---
     f_make_planner_thread_safe :: proc() ---
+}
+
+// One name for the f64 and f32 variants, resolved from the argument types
+plan_many :: proc {
+    plan_many_dft,
+    f_plan_many_dft,
+    plan_many_dft_r2c,
+    f_plan_many_dft_r2c,
+    plan_many_dft_c2r,
+    f_plan_many_dft_c2r,
+}
+
+// the new-array execute functions: run a plan on other arrays of the planned shape
+execute_arrays :: proc {
+    execute_dft,
+    f_execute_dft,
+    execute_dft_r2c,
+    f_execute_dft_r2c,
+    execute_dft_c2r,
+    f_execute_dft_c2r,
+}
+
+destroy :: proc {
+    destroy_plan,
+    f_destroy_plan,
 }

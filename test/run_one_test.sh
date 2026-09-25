@@ -5,7 +5,7 @@ test_name="${1:-playground}"
 runner_log="$(mktemp)"
 trap 'rm -f "$runner_log"' EXIT HUP INT TERM
 
-if ! odin test /home/dpooria/Documents/code/opaw/omat/test/ \
+if ! odin test $PWD \
         -define:ODIN_TEST_NAMES="test.${test_name}" \
         -define:ODIN_TEST_THREADS=1 \
         -define:ODIN_TEST_FANCY=false \

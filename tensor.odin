@@ -4,12 +4,16 @@ import "base:intrinsics"
 import "core:fmt"
 import "core:mem"
 
+// An n-dimensional array: the element at index i is data[sum_d( i[d] * strides[d] )].
+// Tensors made by omat are row-major and contiguous.
+// A view (view, view_row, transpose_view, ...) is a borrowed tensor with other strides into another tensor data, which must outlive it;
+// tensor_destroy frees nothing for borrowed tensors.
 Tensor :: struct($T: typeid, $N: int) where intrinsics.type_is_numeric(T) {
     allocator: mem.Allocator,
-    data:      []T,
+    data:      []T, // from the first element to the last
     shape:     [N]int,
-    // strides:   [N]int,
-    // owns_data: bool,
+    strides:   [N]int,
+    borrowed:  bool,
 }
 
 @(require_results)
@@ -23,31 +27,36 @@ tensor_create :: proc(
 ) {
     t.allocator = allocator
     t.shape = shape
-    size: int = 1
-    for s in shape {
-        size *= s
-    }
-    data, err := mem.make_aligned([]T, size, 16, t.allocator) // FFTW needs 16-byte alignment
+    t.strides = strides(shape)
+    size: int = size_of_shape(shape)
+    data, err := mem.make_aligned([]T, size, 16, t.allocator) // 16-byte alignment
     ok = (err == nil)
     if !ok {
         fmt.eprintfln("Could not create an array with the shape (%v): %v", shape, err)
         return
     }
     t.data = data
-    return
+    return t, ok
 }
 
 tensor_destroy :: proc(t: ^Tensor($T, $N)) {
-    delete(t.data, t.allocator)
+    if !t.borrowed {
+        delete(t.data, t.allocator)
+    }
     t^ = {}
 }
 
+// A contiguous copy of any tensor or view
 @(require_results)
-tensor_copy :: proc(src: Tensor($T, $N)) -> (dst: Tensor(T, N), ok: bool) {
-    dst, ok = tensor_create(T, src.shape, src.allocator)
-    assert(ok)
-    copy(dst.data, src.data)
-    return dst, ok
+tensor_copy :: proc(src: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) {
+    dst := zeros(T, src.shape, allocator)
+    assign(dst, src)
+    return dst
+}
+
+// for FFTW and SIMD -> 16-byte aligned data
+is_aligned :: proc(t: Tensor($T, $N)) -> bool {
+    return uintptr(raw_data(t.data)) % 16 == 0
 }
 
 tensor_from_data :: proc(
@@ -61,7 +70,12 @@ tensor_from_data :: proc(
         size *= dimension
     }
     assert(len(data) == size)
-    return Tensor(T, N){allocator = allocator, shape = shape, data = data}
+    return Tensor(T, N) {
+        allocator = allocator,
+        shape = shape,
+        strides = strides(shape),
+        data = data,
+    }
 }
 
 
@@ -90,18 +104,9 @@ tensor_complex64_from_parts_slice :: proc(
 }
 
 @(require_results)
-tensor_complex64_from_parts_tensor :: proc(
-    real_tensor: Tensor(f32, $N),
-    imag_tensor: Tensor(f32, N),
-) -> Tensor(complex64, N) {
-
-    assert(real_tensor.shape == imag_tensor.shape)
-    res, ok := tensor_create(complex64, real_tensor.shape, real_tensor.allocator)
-    assert(ok)
-
-    for i in 0 ..< len(real_tensor.data) {
-        res.data[i] = complex(real_tensor.data[i], imag_tensor.data[i])
-    }
+tensor_complex64_from_parts_tensor :: proc(re, im: Tensor(f32, $N)) -> Tensor(complex64, N) {
+    res := zeros(complex64, re.shape, re.allocator)
+    complex_into(res, re, im)
     return res
 }
 
@@ -130,19 +135,26 @@ tensor_complex128_from_parts_slice :: proc(
 }
 
 @(require_results)
-tensor_complex128_from_parts_tensor :: proc(
-    real_tensor: Tensor(f64, $N),
-    imag_tensor: Tensor(f64, N),
-) -> Tensor(complex128, N) {
-
-    assert(real_tensor.shape == imag_tensor.shape)
-    res, ok := tensor_create(complex128, real_tensor.shape, real_tensor.allocator)
-    assert(ok)
-
-    for i in 0 ..< len(real_tensor.data) {
-        res.data[i] = complex(real_tensor.data[i], imag_tensor.data[i])
-    }
+tensor_complex128_from_parts_tensor :: proc(re, im: Tensor(f64, $N)) -> Tensor(complex128, N) {
+    res := zeros(complex128, re.shape, re.allocator)
+    complex_into(res, re, im)
     return res
+}
+
+// out = complex(re, im) element by element, for tensors and views of one shape
+complex_into :: proc(out: Tensor($C, $N), re, im: Tensor($R, N)) {
+    assert(out.shape == re.shape && re.shape == im.shape, "complex_into: shapes differ")
+    l := plan_loop(re.shape, out.strides, re.strides, im.strides)
+    so, sr, si := loop_step(l, out.strides), loop_step(l, re.strides), loop_step(l, im.strides)
+    for r in 0 ..< l.rows {
+        po, pr, pi :=
+            row_offset(l, r, out.strides),
+            row_offset(l, r, re.strides),
+            row_offset(l, r, im.strides)
+        for k in 0 ..< l.n {
+            out.data[po + k * so] = complex(re.data[pr + k * sr], im.data[pi + k * si])
+        }
+    }
 }
 
 @(require_results)

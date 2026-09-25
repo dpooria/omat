@@ -23,9 +23,14 @@ fftw_raw_api :: proc(t: ^testing.T) {
 
     // same bits as the C FFTW_* macros
     testing.expect_value(t, transmute(u32)fftw.MEASURE, 0)
-    testing.expect_value(t, transmute(u32)(fftw.PATIENT | {.DESTROY_INPUT, .WISDOM_ONLY}), 1 << 5 | 1 | 1 << 21)
+    testing.expect_value(
+        t,
+        transmute(u32)(fftw.PATIENT | {.DESTROY_INPUT, .WISDOM_ONLY}),
+        1 << 5 | 1 | 1 << 21,
+    )
 
     // globals get the prefix too: f_version is fftwf_version
     testing.expect(t, strings.has_prefix(string(cstring(&fftw.version)), "fftw-"))
     testing.expect(t, strings.has_prefix(string(cstring(&fftw.f_version)), "fftw-"))
 }
+
