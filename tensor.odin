@@ -27,7 +27,7 @@ tensor_create :: proc(
     for s in shape {
         size *= s
     }
-    data, err := make([]T, size, allocator = t.allocator)
+    data, err := mem.make_aligned([]T, size, 16, t.allocator) // FFTW needs 16-byte alignment
     ok = (err == nil)
     if !ok {
         fmt.eprintfln("Could not create an array with the shape (%v): %v", shape, err)
