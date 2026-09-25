@@ -72,6 +72,13 @@ JobZ :: enum c.char {
     Vectors   = 'V', // Compute eigenvalues and eigenvectors
 }
 
+// Which eigenvalues to compute (syevr, heevr)
+LARange :: enum c.char {
+    All     = 'A', // All eigenvalues
+    Values  = 'V', // Eigenvalues in the half-open interval (vl, vu]
+    Indices = 'I', // The il-th through iu-th eigenvalues (1-based, ascending)
+}
+
 // Job control specifically for Divide-and-Conquer SVD (gesdd)
 JobSVD :: enum c.char {
     All       = 'A', // Compute all columns of U / rows of VT

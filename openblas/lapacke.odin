@@ -58,11 +58,23 @@ foreign openblas_lapacke {
     cgetrs :: proc(matrix_layout: Order, trans: LATranspose, n: blasint, nrhs: blasint, a: [^]complex64, lda: blasint, ipiv: [^]blasint, b: [^]complex64, ldb: blasint) -> blasint ---
     zgetrs :: proc(matrix_layout: Order, trans: LATranspose, n: blasint, nrhs: blasint, a: [^]complex128, lda: blasint, ipiv: [^]blasint, b: [^]complex128, ldb: blasint) -> blasint ---
 
+    /* ---------------- Inverse from LU Factorization ---------------- */
+    sgetri :: proc(matrix_layout: Order, n: blasint, a: [^]f32, lda: blasint, ipiv: [^]blasint) -> blasint ---
+    dgetri :: proc(matrix_layout: Order, n: blasint, a: [^]f64, lda: blasint, ipiv: [^]blasint) -> blasint ---
+    cgetri :: proc(matrix_layout: Order, n: blasint, a: [^]complex64, lda: blasint, ipiv: [^]blasint) -> blasint ---
+    zgetri :: proc(matrix_layout: Order, n: blasint, a: [^]complex128, lda: blasint, ipiv: [^]blasint) -> blasint ---
+
     /* -------------------- Least Squares Solvers (Min ||AX - B||) ---------------*/
     sgels :: proc(matrix_layout: Order, trans: LATranspose, m: blasint, n: blasint, nrhs: blasint, a: [^]f32, lda: blasint, b: [^]f32, ldb: blasint) -> blasint ---
     dgels :: proc(matrix_layout: Order, trans: LATranspose, m: blasint, n: blasint, nrhs: blasint, a: [^]f64, lda: blasint, b: [^]f64, ldb: blasint) -> blasint ---
     cgels :: proc(matrix_layout: Order, trans: LATranspose, m: blasint, n: blasint, nrhs: blasint, a: [^]complex64, lda: blasint, b: [^]complex64, ldb: blasint) -> blasint ---
     zgels :: proc(matrix_layout: Order, trans: LATranspose, m: blasint, n: blasint, nrhs: blasint, a: [^]complex128, lda: blasint, b: [^]complex128, ldb: blasint) -> blasint ---
+
+    /* -------------- Rank-Revealing Least Squares via SVD (Min ||AX - B||) -------------- */
+    sgelsd :: proc(matrix_layout: Order, m: blasint, n: blasint, nrhs: blasint, a: [^]f32, lda: blasint, b: [^]f32, ldb: blasint, s: [^]f32, rcond: f32, rank: ^blasint) -> blasint ---
+    dgelsd :: proc(matrix_layout: Order, m: blasint, n: blasint, nrhs: blasint, a: [^]f64, lda: blasint, b: [^]f64, ldb: blasint, s: [^]f64, rcond: f64, rank: ^blasint) -> blasint ---
+    cgelsd :: proc(matrix_layout: Order, m: blasint, n: blasint, nrhs: blasint, a: [^]complex64, lda: blasint, b: [^]complex64, ldb: blasint, s: [^]f32, rcond: f32, rank: ^blasint) -> blasint ---
+    zgelsd :: proc(matrix_layout: Order, m: blasint, n: blasint, nrhs: blasint, a: [^]complex128, lda: blasint, b: [^]complex128, ldb: blasint, s: [^]f64, rcond: f64, rank: ^blasint) -> blasint ---
 
     /* ---------- Singular Value Decomposition (SVD) --------- */
     sgesdd :: proc(matrix_layout: Order, jobz: JobSVD, m: blasint, n: blasint, a: [^]f32, lda: blasint, s: [^]f32, u: [^]f32, ldu: blasint, vt: [^]f32, ldvt: blasint) -> blasint ---
@@ -88,6 +100,12 @@ foreign openblas_lapacke {
     cheevd :: proc(matrix_layout: Order, jobz: JobZ, uplo: LAUpLo, n: blasint, a: [^]complex64, lda: blasint, w: [^]f32) -> blasint ---
     zheevd :: proc(matrix_layout: Order, jobz: JobZ, uplo: LAUpLo, n: blasint, a: [^]complex128, lda: blasint, w: [^]f64) -> blasint ---
 
+    /* ------------ Selected Symmetric/Hermitian Eigenpairs (MRRR) ------------ */
+    ssyevr :: proc(matrix_layout: Order, jobz: JobZ, range: LARange, uplo: LAUpLo, n: blasint, a: [^]f32, lda: blasint, vl: f32, vu: f32, il: blasint, iu: blasint, abstol: f32, m: ^blasint, w: [^]f32, z: [^]f32, ldz: blasint, isuppz: [^]blasint) -> blasint ---
+    dsyevr :: proc(matrix_layout: Order, jobz: JobZ, range: LARange, uplo: LAUpLo, n: blasint, a: [^]f64, lda: blasint, vl: f64, vu: f64, il: blasint, iu: blasint, abstol: f64, m: ^blasint, w: [^]f64, z: [^]f64, ldz: blasint, isuppz: [^]blasint) -> blasint ---
+    cheevr :: proc(matrix_layout: Order, jobz: JobZ, range: LARange, uplo: LAUpLo, n: blasint, a: [^]complex64, lda: blasint, vl: f32, vu: f32, il: blasint, iu: blasint, abstol: f32, m: ^blasint, w: [^]f32, z: [^]complex64, ldz: blasint, isuppz: [^]blasint) -> blasint ---
+    zheevr :: proc(matrix_layout: Order, jobz: JobZ, range: LARange, uplo: LAUpLo, n: blasint, a: [^]complex128, lda: blasint, vl: f64, vu: f64, il: blasint, iu: blasint, abstol: f64, m: ^blasint, w: [^]f64, z: [^]complex128, ldz: blasint, isuppz: [^]blasint) -> blasint ---
+
     /* ---------------------- Eigenvalues & Eigenvectors ------------------------- */
     sgeev :: proc(matrix_layout: Order, jobvl: JobZ, jobvr: JobZ, n: blasint, a: [^]f32, lda: blasint, wr: [^]f32, wi: [^]f32, vl: [^]f32, ldvl: blasint, vr: [^]f32, ldvr: blasint) -> blasint ---
     dgeev :: proc(matrix_layout: Order, jobvl: JobZ, jobvr: JobZ, n: blasint, a: [^]f64, lda: blasint, wr: [^]f64, wi: [^]f64, vl: [^]f64, ldvl: blasint, vr: [^]f64, ldvr: blasint) -> blasint ---
@@ -99,6 +117,12 @@ foreign openblas_lapacke {
     dsygvd :: proc(matrix_layout: Order, itype: blasint, jobz: JobZ, uplo: LAUpLo, n: blasint, a: [^]f64, lda: blasint, b: [^]f64, ldb: blasint, w: [^]f64) -> blasint ---
     chegvd :: proc(matrix_layout: Order, itype: blasint, jobz: JobZ, uplo: LAUpLo, n: blasint, a: [^]complex64, lda: blasint, b: [^]complex64, ldb: blasint, w: [^]f32) -> blasint ---
     zhegvd :: proc(matrix_layout: Order, itype: blasint, jobz: JobZ, uplo: LAUpLo, n: blasint, a: [^]complex128, lda: blasint, b: [^]complex128, ldb: blasint, w: [^]f64) -> blasint ---
+
+    /* ------ Reduce Generalized Symmetric/Hermitian to Standard Form (B from potrf) ------ */
+    ssygst :: proc(matrix_layout: Order, itype: blasint, uplo: LAUpLo, n: blasint, a: [^]f32, lda: blasint, b: [^]f32, ldb: blasint) -> blasint ---
+    dsygst :: proc(matrix_layout: Order, itype: blasint, uplo: LAUpLo, n: blasint, a: [^]f64, lda: blasint, b: [^]f64, ldb: blasint) -> blasint ---
+    chegst :: proc(matrix_layout: Order, itype: blasint, uplo: LAUpLo, n: blasint, a: [^]complex64, lda: blasint, b: [^]complex64, ldb: blasint) -> blasint ---
+    zhegst :: proc(matrix_layout: Order, itype: blasint, uplo: LAUpLo, n: blasint, a: [^]complex128, lda: blasint, b: [^]complex128, ldb: blasint) -> blasint ---
 
     /* --------- Cholesky Factorization (A = L * L^T or A = U^T * U) -------------- */
     spotrf :: proc(matrix_layout: Order, uplo: LAUpLo, n: blasint, a: [^]f32, lda: blasint) -> blasint ---
