@@ -2,24 +2,6 @@ package omat
 
 import "base:builtin"
 
-// One field from every item in a slice, without copying.
-field_view :: proc(items: []$S, $T: typeid, field_offset: uintptr) -> Tensor(T, 1) {
-    #assert(size_of(S) % size_of(T) == 0)
-    assert(field_offset + uintptr(size_of(T)) <= uintptr(size_of(S)))
-
-    stride := size_of(S) / size_of(T)
-    res := Tensor(T, 1) {
-        shape    = {len(items)},
-        strides  = {stride},
-        borrowed = true,
-    }
-    if len(items) > 0 {
-        ptr := ([^]T)(uintptr(raw_data(items)) + uintptr(field_offset))
-        res.data = ptr[:(len(items) - 1) * stride + 1]
-    }
-    return res
-}
-
 // Views: borrowed tensors that share another tensor data with their own shape and strides.
 // Nothing is copied, and writing through a view writes the original.
 
@@ -170,3 +152,22 @@ concatenate :: proc(
     }
     return res
 }
+
+// One field from every item in a slice, without copying.
+field_view :: proc(items: []$S, $T: typeid, field_offset: uintptr) -> Tensor(T, 1) {
+    #assert(size_of(S) % size_of(T) == 0)
+    assert(field_offset + uintptr(size_of(T)) <= uintptr(size_of(S)))
+
+    stride := size_of(S) / size_of(T)
+    res := Tensor(T, 1) {
+        shape    = {len(items)},
+        strides  = {stride},
+        borrowed = true,
+    }
+    if len(items) > 0 {
+        ptr := ([^]T)(uintptr(raw_data(items)) + uintptr(field_offset))
+        res.data = ptr[:(len(items) - 1) * stride + 1]
+    }
+    return res
+}
+
