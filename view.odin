@@ -98,7 +98,7 @@ leading_dimension :: proc(t: Tensor($T, $N)) -> int where N == 1 || N == 2 {
     }
 }
 
-ooffset_of :: proc(index: [$N]int, strides: [N]int) -> int {
+offset_of_index :: proc(index: [$N]int, strides: [N]int) -> int {
     offset := 0
     for i, d in index {
         offset += i * strides[d]

@@ -48,7 +48,7 @@ at_indices_arr :: proc(t: Tensor($T, $N), indices: [N]int) -> ^T {
     for i, d in indices {
         assert(0 <= i && i < t.shape[d], "at: index out of range")
     }
-    return &t.data[ooffset_of(indices, t.strides)]
+    return &t.data[offset_of_index(indices, t.strides)]
 }
 
 at_indices_int :: proc(t: Tensor($T, $N), indices: ..int) -> ^T {

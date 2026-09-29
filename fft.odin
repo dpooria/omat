@@ -312,7 +312,7 @@ grid_offset :: #force_inline proc(grid: Tensor($T, $N), flat: int, contiguous: b
     if contiguous {
         return flat
     }
-    return ooffset_of(unravel_index(flat, grid.shape), grid.strides)
+    return offset_of_index(unravel_index(flat, grid.shape), grid.strides)
 }
 
 // coefficients[g] = grid[index[g]]

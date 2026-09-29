@@ -15,7 +15,7 @@ helpers_small :: proc(t: ^testing.T) {
     testing.expect_value(t, om.size_of_shape([3]int{2, 3, 4}), 24)
     testing.expect_value(t, om.size_of_shape([0]int{}), 1)
     testing.expect_value(t, om.strides([3]int{2, 3, 4}), [3]int{12, 4, 1})
-    testing.expect_value(t, om.ooffset_of([2]int{1, 2}, [2]int{10, 3}), 16)
+    testing.expect_value(t, om.offset_of_index([2]int{1, 2}, [2]int{10, 3}), 16)
     testing.expect_value(t, om.round(2.456, 2), 2.46)
     testing.expect_value(t, om.round(2.5), 3.0)
 

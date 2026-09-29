@@ -49,7 +49,7 @@ tensor_as_rmatrix_2 :: proc(t: Tensor($T, 2), result: ^#row_major matrix[$NROWS,
     }
 }
 
-// Write data from a tensor to an Odin matrix as a tensor
+// Write data from a tensor to an Odin matrix
 tensor_as_matrix :: proc {
     tensor_as_matrix_1,
     tensor_as_matrix_2,
@@ -102,7 +102,8 @@ vcolmajor_matrix_as_tensor :: proc(m: ^matrix[$NROWS, $NCOLS]$T) -> (result: Ten
     result.strides = strides(result.shape)
     result.data = raw_data(m)[:NCOLS * NROWS]
     result.borrowed = true
-    result = transpose_view(result) // XXX: itranspose cannot be used bc of hardcoded .RowMajor for openblas
+    // XXX: itranspose cannot be used here bc of hardcoded .RowMajor for openblas
+    result = transpose_view(result)
     return result
 }
 
