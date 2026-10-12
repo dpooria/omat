@@ -10,7 +10,12 @@ import om ".."
 random_complex :: proc($C: typeid, shape: [$N]int) -> om.Tensor(C, N) {
     t := om.zeros(C, shape)
     for &x in t.data {
-        x = complex(rand.float64(), rand.float64())
+        when C == complex128 {
+            x = complex(rand.float64(), rand.float64())
+        }
+        else {
+            x = complex(rand.float32(), rand.float32())
+        }
     }
     return t
 }
