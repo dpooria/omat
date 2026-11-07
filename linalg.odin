@@ -963,7 +963,7 @@ orthonormalize :: proc(psi: Tensor($T, 2), allocator := context.allocator) -> Te
     return Q
 }
 
-// lstsq, pinv: rank-deficient and non-square systems through the SVD. 
+// lstsq, pinv: rank-deficient and non-square systems through the SVD.
 // Singular values below rcond * s_max count as zero; rcond < 0 means max(m, n) * epsilon, as in numpy.
 
 // x minimizing |A x - b| for b a vector or every row of B, the smallest such x when A is rank

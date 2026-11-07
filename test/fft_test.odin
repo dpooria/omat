@@ -12,8 +12,7 @@ random_complex :: proc($C: typeid, shape: [$N]int) -> om.Tensor(C, N) {
     for &x in t.data {
         when C == complex128 {
             x = complex(rand.float64(), rand.float64())
-        }
-        else {
+        } else {
             x = complex(rand.float32(), rand.float32())
         }
     }

@@ -611,6 +611,7 @@ subtract_scalar :: proc(t: Tensor($T, $N), alpha: T) -> Tensor(T, N) {
     alpha := alpha
     return binary(t, broadcast(&alpha, t.shape), .Subtract, t.allocator)
 }
+
 // alpha - t
 @(require_results)
 subtract_scalar2 :: proc(
@@ -620,6 +621,7 @@ subtract_scalar2 :: proc(
     alpha := alpha
     return binary(broadcast(&alpha, t.shape), t, .Subtract, t.allocator)
 }
+
 subtract :: proc {
     subtract_tensors,
     subtract_scalar,
@@ -645,6 +647,7 @@ divide_scalar2 :: proc(
     alpha := alpha
     return binary(broadcast(&alpha, t.shape), t, .Divide, t.allocator)
 }
+
 divide :: proc {
     divide_tensors,
     divide_scalar,
@@ -670,6 +673,7 @@ pow_scalar2 :: proc(
     alpha := alpha
     return binary(broadcast(&alpha, t.shape), t, .Pow, t.allocator)
 }
+
 pow :: proc {
     pow_tensors,
     pow_scalar,
@@ -690,6 +694,7 @@ imultiply_scalar :: proc(t: ^Tensor($T, $N), alpha: T) {
 imultiply_scalar2 :: proc(alpha: $T, t: ^Tensor(T, $N)) where intrinsics.type_is_numeric(T) {
     imultiply_scalar(t, alpha)
 }
+
 imultiply :: proc {
     imultiply_tensors,
     imultiply_scalar,
@@ -765,6 +770,7 @@ ipow_scalar2 :: proc(alpha: $T, t: ^Tensor(T, $N)) where intrinsics.type_is_nume
     alpha := alpha
     binary_into(t^, broadcast(&alpha, t.shape), t^, .Pow)
 }
+
 ipow :: proc {
     ipow_tensors,
     ipow_scalar,

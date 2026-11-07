@@ -34,7 +34,7 @@ npy_descriptor_matches_basic_numeric_types :: proc(t: ^testing.T) {
 
 @(test)
 npy_file_round_trip :: proc(t: ^testing.T) {
-	// TODO: better temporary path
+    // TODO: better temporary path
     path := "/tmp/omat_test_round_trip.npy"
     defer os.remove(path)
 

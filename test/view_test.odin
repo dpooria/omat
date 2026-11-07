@@ -151,3 +151,4 @@ view_blas_products :: proc(t: ^testing.T) {
     defer om.tensor_destroy(&wh)
     expect_close(t, w.data, wh.data, 1e-12)
 }
+

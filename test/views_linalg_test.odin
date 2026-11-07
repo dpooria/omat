@@ -263,7 +263,10 @@ views_blas_and_einsum :: proc(t: ^testing.T) {
     defer om.tensor_destroy(&uc)
     defer om.tensor_destroy(&vc)
     testing.expect(t, abs(om.dot(u, v) - om.dot(uc, vc)) < 1e-12)
-    testing.expect(t, abs(om.dot(u, v, conjugate = true) - om.dot(uc, vc, conjugate = true)) < 1e-12)
+    testing.expect(
+        t,
+        abs(om.dot(u, v, conjugate = true) - om.dot(uc, vc, conjugate = true)) < 1e-12,
+    )
 
     // gemm accumulating into a block: C = 2 A^T B + 0.5 C, A^T a transposed view
     B := random_matrix(complex128, [2]int{4, 3})
@@ -325,3 +328,4 @@ views_fft_one_shot :: proc(t: ^testing.T) {
     defer om.tensor_destroy(&g2)
     expect_close(t, g1.data, g2.data, 1e-12)
 }
+

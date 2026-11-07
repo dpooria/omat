@@ -41,8 +41,14 @@ special_real_spherical_harmonics :: proc(t: ^testing.T) {
     testing.expect(t, abs(ylm[om.ylm_index(1, 0)] - c1 * 2 / 3) < 1e-15)
     testing.expect(t, abs(ylm[om.ylm_index(1, 1)] - c1 * 1 / 3) < 1e-15)
     // l = 2: sqrt(15 / 4pi) xy / r^2 and sqrt(5 / 16pi) (3 z^2 - r^2) / r^2
-    testing.expect(t, abs(ylm[om.ylm_index(2, -2)] - math.sqrt_f64(15 / (4 * math.PI)) * -2 / 9) < 1e-15)
-    testing.expect(t, abs(ylm[om.ylm_index(2, 0)] - math.sqrt_f64(5 / (16 * math.PI)) * (12 - 9) / 9.0) < 1e-15)
+    testing.expect(
+        t,
+        abs(ylm[om.ylm_index(2, -2)] - math.sqrt_f64(15 / (4 * math.PI)) * -2 / 9) < 1e-15,
+    )
+    testing.expect(
+        t,
+        abs(ylm[om.ylm_index(2, 0)] - math.sqrt_f64(5 / (16 * math.PI)) * (12 - 9) / 9.0) < 1e-15,
+    )
 
     // orthonormal on the sphere, by a product quadrature exact to degree 2 lmax
     x, w := om.gauss_legendre(lmax + 1)
@@ -131,7 +137,10 @@ special_gaunt :: proc(t: ^testing.T) {
     // with Y_00: 1 / sqrt(4pi) delta
     for l in 0 ..= 3 {
         for m in -l ..= l {
-            testing.expect(t, abs(om.gaunt(0, 0, l, m, l, m) - 1 / math.sqrt_f64(4 * math.PI)) < 1e-14)
+            testing.expect(
+                t,
+                abs(om.gaunt(0, 0, l, m, l, m) - 1 / math.sqrt_f64(4 * math.PI)) < 1e-14,
+            )
             for m2 in -l ..= l {
                 if m2 != m {
                     testing.expect(t, abs(om.gaunt(0, 0, l, m, l, m2)) < 1e-14)
@@ -140,7 +149,10 @@ special_gaunt :: proc(t: ^testing.T) {
         }
     }
     // m = 0: sqrt((2l1 + 1)(2l2 + 1)(2l3 + 1) / 4pi) (l1 l2 l3; 0 0 0)^2, with (1 1 2; 0 0 0)^2 = 2/15
-    testing.expect(t, abs(om.gaunt(1, 0, 1, 0, 2, 0) - math.sqrt_f64(45 / (4 * math.PI)) * 2 / 15) < 1e-14)
+    testing.expect(
+        t,
+        abs(om.gaunt(1, 0, 1, 0, 2, 0) - math.sqrt_f64(45 / (4 * math.PI)) * 2 / 15) < 1e-14,
+    )
     // x, y and xy: (3 / 4pi) sqrt(15 / 4pi) the integral of x^2 y^2, which is 4pi / 15
     want := 3 / (4 * math.PI) * math.sqrt_f64(15 / (4 * math.PI)) * 4 * math.PI / 15
     testing.expect(t, abs(om.gaunt(1, 1, 1, -1, 2, -2) - want) < 1e-14)
@@ -272,3 +284,4 @@ special_splines :: proc(t: ^testing.T) {
     defer om.spline_destroy(&line)
     testing.expect(t, abs(om.spline_eval(line, 0.25) - 3.5) < 1e-15)
 }
+
