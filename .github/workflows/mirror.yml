@@ -1,0 +1,24 @@
+name: Mirror SourceHut
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout GitHub repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch and push SourceHut changes
+        run: |
+          git remote add sourcehut https://git.sr.ht/~dpooria/omat
+          git fetch sourcehut main
+          git push origin refs/remotes/sourcehut/main:refs/heads/main
