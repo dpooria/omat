@@ -1,0 +1,11 @@
+image: debian/stable
+secrets:
+  - 459fd945-7513-466f-aaed-17095f45e2a5
+sources:
+  - git+https://git.sr.ht/~dpooria/omat
+tasks:
+  - mirror: |
+      cd omat
+      git remote set-head origin -d
+      git remote add github git@github.com:dpooria/omat.git
+      git push github '+refs/remotes/origin/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
