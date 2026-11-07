@@ -88,4 +88,4 @@ G := om.gaunt(l1, m1, l2, m2, l3, m3)
 - FFT plans run on contiguous tensors (the one-shot `fft` accepts views). Planning is
   serialized by a lock, so plans may be made from any thread; executing plans is thread-safe.
 - `set_num_threads(n)` sets OpenBLAS threads and the threads of FFTW plans made afterwards.
--  Batched einsum loops over `gemm` (no `gemm_batch`).
+-  Batched einsum loops over `gemm`.
