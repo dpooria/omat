@@ -54,6 +54,14 @@ tensor_copy :: proc(src: Tensor($T, $N), allocator := context.allocator) -> Tens
     return dst
 }
 
+// Copies t into contiguous storage from allocator and replaces it in place.
+// The old data is destroyed unless if t is borrowed, then parent tensor is unaffected.
+tensor_realloc :: proc(t: ^Tensor($T, $N), allocator: mem.Allocator) {
+    dst := tensor_copy(t^, allocator)
+    tensor_destroy(t)
+    t^ = dst
+}
+
 // for FFTW and SIMD -> 16-byte aligned data
 is_aligned :: proc(t: Tensor($T, $N)) -> bool {
     return uintptr(raw_data(t.data)) % 16 == 0
