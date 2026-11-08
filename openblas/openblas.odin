@@ -1,21 +1,21 @@
 package openblas
 
+import "../config"
 import "core:c"
 
-foreign import openblas "system:openblas64"
+foreign import openblas {config.OPENBLAS}
 
-blasint :: i64
-
+blasint :: i64 when config.OPENBLAS_ILP64 else i32
 /*Set the threading backend to a custom callback.*/
-openblas_dojob_callback :: proc "c" (job_id: c.int, job_data: rawptr, thread_id: c.int)
+openblas_dojob_callback :: proc "c" (thread_num: c.int, jobdata: rawptr, dojob_data: c.int)
 
 openblas_threads_callback :: proc "c" (
-    num_threads: c.int,
+    sync: c.int,
     dojob: openblas_dojob_callback,
-    jobdata_elsize: c.int,
-    jobdata_stride: c.size_t,
-    jobdata: rawptr,
     num_jobs: c.int,
+    jobdata_elsize: c.size_t,
+    jobdata: rawptr,
+    dojob_data: c.int,
 )
 
 // openblas threading models

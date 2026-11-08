@@ -1,12 +1,21 @@
 package test
 
 import "core:strings"
+import "core:sync"
 import "core:testing"
 
+import omat ".."
+import "../config"
 import "../fftw"
 
 @(test)
 fftw_raw_api :: proc(t: ^testing.T) {
+    // without FFTW_threads and the init call to make_planner_thread_safe
+    // the tests fail in multi-threaded `odin test`; syncing with omat's mutex avoids that.
+    when !config.USE_FFTW_THREADS {
+        sync.mutex_lock(&omat.fft_planner_lock)
+        defer sync.mutex_unlock(&omat.fft_planner_lock)
+    }
     // the raw FFTW interface, as in C minus the prefix
     n0, n1, n2 :: 4, 4, 4
     data := make([]complex128, n0 * n1 * n2)

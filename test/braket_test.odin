@@ -4,6 +4,7 @@ import "core:math"
 import "core:testing"
 
 import om ".."
+import "../config"
 import ob "../openblas"
 
 @(test)
@@ -350,8 +351,10 @@ tensor_niceties :: proc(t: ^testing.T) {
 
 @(test)
 threads_and_files :: proc(t: ^testing.T) {
-    om.set_num_threads(2)
-    defer om.set_num_threads(1)
+    when config.USE_OPENBLAS_THREADS {
+        om.set_num_threads(2)
+        defer om.set_num_threads(1)
+    }
     x := random_matrix(complex128, [3]int{8, 8, 8})
     defer om.tensor_destroy(&x)
     y := om.fft(x)

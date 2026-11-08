@@ -1,7 +1,9 @@
 package openblas
 
 import "core:c"
-foreign import openblas_cblas "system:openblas64"
+
+import "../config"
+foreign import openblas_cblas {config.OPENBLAS}
 
 // A stripped-down version of https://github.com/kalsprite/odin-openblas.git
 

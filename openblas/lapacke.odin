@@ -34,7 +34,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 package openblas
 
-foreign import openblas_lapacke "system:openblas64"
+import "../config"
+
+foreign import openblas_lapacke {config.OPENBLAS}
 
 LAPACK_WORK_MEMORY_ERROR :: -1010
 LAPACK_TRANSPOSE_MEMORY_ERROR :: -1011
@@ -142,3 +144,4 @@ foreign openblas_lapacke {
     cpotri :: proc(matrix_layout: Order, uplo: LAUpLo, n: blasint, a: [^]complex64, lda: blasint) -> blasint ---
     zpotri :: proc(matrix_layout: Order, uplo: LAUpLo, n: blasint, a: [^]complex128, lda: blasint) -> blasint ---
 }
+
