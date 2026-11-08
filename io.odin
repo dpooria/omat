@@ -331,7 +331,7 @@ print_dimension :: proc(
     format: string,
     f := os.stdout,
 ) {
-    fmt.fprint(f, "{")
+    fmt.fprint(f, "[")
 
     for index in 0 ..< shape[dim] {
         offset := base_offset + index * strides[dim]
@@ -346,7 +346,7 @@ print_dimension :: proc(
         }
     }
 
-    fmt.fprint(f, "},\n")
+    fmt.fprint(f, "],\n")
 }
 
 print :: proc(t: Tensor($T, $N), format: string = "%v", f := os.stdout) {
