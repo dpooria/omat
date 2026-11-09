@@ -112,8 +112,8 @@ tensor_complex64_from_parts_slice :: proc(
 }
 
 @(require_results)
-tensor_complex64_from_parts_tensor :: proc(re, im: Tensor(f32, $N)) -> Tensor(complex64, N) {
-    res := zeros(complex64, re.shape, re.allocator)
+tensor_complex64_from_parts_tensor :: proc(re, im: Tensor(f32, $N), allocator := context.allocator) -> Tensor(complex64, N) {
+    res := zeros(complex64, re.shape, allocator)
     complex_into(res, re, im)
     return res
 }
@@ -143,8 +143,8 @@ tensor_complex128_from_parts_slice :: proc(
 }
 
 @(require_results)
-tensor_complex128_from_parts_tensor :: proc(re, im: Tensor(f64, $N)) -> Tensor(complex128, N) {
-    res := zeros(complex128, re.shape, re.allocator)
+tensor_complex128_from_parts_tensor :: proc(re, im: Tensor(f64, $N), allocator := context.allocator) -> Tensor(complex128, N) {
+    res := zeros(complex128, re.shape, allocator)
     complex_into(res, re, im)
     return res
 }

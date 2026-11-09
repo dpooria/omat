@@ -210,6 +210,7 @@ fft_transform :: proc(
     shape: [N]int,
     options := FFTOptions{},
     norm := FFTNorm.Backward,
+    allocator := context.allocator,
 ) -> Tensor(B, N) {
     t := contiguous(t)
     defer tensor_destroy(&t)
@@ -219,7 +220,7 @@ fft_transform :: proc(
     }
     p := fft_plan(A, B, shape, options, norm)
     defer fft_destroy(&p)
-    out := zeros(B, p.out_shape, t.allocator)
+    out := zeros(B, p.out_shape, allocator)
     fft_execute(p, t, out)
     return out
 }
@@ -229,8 +230,9 @@ fft_complex :: proc(
     t: Tensor($C, $N),
     options := FFTOptions{},
     norm := FFTNorm.Backward,
+    allocator := context.allocator,
 ) -> Tensor(C, N) where intrinsics.type_is_complex(C) {
-    return fft_transform(C, t, t.shape, options - {.Inverse}, norm)
+    return fft_transform(C, t, t.shape, options - {.Inverse}, norm, allocator)
 }
 
 @(require_results)
@@ -238,8 +240,9 @@ fft_f32 :: proc(
     t: Tensor(f32, $N),
     options := FFTOptions{},
     norm := FFTNorm.Backward,
+    allocator := context.allocator,
 ) -> Tensor(complex64, N) {
-    return fft_transform(complex64, t, t.shape, options, norm)
+    return fft_transform(complex64, t, t.shape, options, norm, allocator)
 }
 
 @(require_results)
@@ -247,8 +250,9 @@ fft_f64 :: proc(
     t: Tensor(f64, $N),
     options := FFTOptions{},
     norm := FFTNorm.Backward,
+    allocator := context.allocator,
 ) -> Tensor(complex128, N) {
-    return fft_transform(complex128, t, t.shape, options, norm)
+    return fft_transform(complex128, t, t.shape, options, norm, allocator)
 }
 
 // Complex tensors give the full spectrum, real tensors the half spectrum [..., n/2+1].
@@ -263,8 +267,9 @@ invfft :: proc(
     t: Tensor($C, $N),
     options := FFTOptions{},
     norm := FFTNorm.Backward,
+    allocator := context.allocator,
 ) -> Tensor(C, N) where intrinsics.type_is_complex(C) {
-    return fft_transform(C, t, t.shape, options + {.Inverse}, norm)
+    return fft_transform(C, t, t.shape, options + {.Inverse}, norm, allocator)
 }
 
 // Inverse of a real fft; n is the real length of the last axis, 0 for 2 * (m - 1).
@@ -274,12 +279,13 @@ invrfft :: proc(
     n := 0,
     options := FFTOptions{},
     norm := FFTNorm.Backward,
+    allocator := context.allocator,
 ) -> Tensor(intrinsics.type_elem_type(C), N) where intrinsics.type_is_complex(C) {
     shape := t.shape
     shape[N - 1] = n if n > 0 else 2 * (shape[N - 1] - 1)
     tmp := tensor_copy(t) // complex -> real destroys its input
     defer tensor_destroy(&tmp)
-    return fft_transform(intrinsics.type_elem_type(C), tmp, shape, options, norm)
+    return fft_transform(intrinsics.type_elem_type(C), tmp, shape, options, norm, allocator)
 }
 
 // Sample frequencies of an n-point fft with sample spacing d: [0, 1, ..., -2, -1] / (d * n)

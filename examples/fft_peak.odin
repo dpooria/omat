@@ -14,10 +14,10 @@ main :: proc() {
 
     // use arenas to avoid repeated calls to om.tensor_destroy
     arena: vmem.Arena
-    arena_allocator := vmem.arena_allocator(&arena)
     defer vmem.arena_destroy(&arena)
+    context.allocator = vmem.arena_allocator(&arena)
 
-    signal := om.zeros(f64, [1]int{n}, arena_allocator)
+    signal := om.zeros(f64, [1]int{n})
 
     for &value, i in signal.data {
         value = math.sin(2 * math.PI * frequency * f64(i) / sample_rate)

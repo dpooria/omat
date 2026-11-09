@@ -111,7 +111,12 @@ std :: proc(t: Tensor($T, $N)) -> T where !intrinsics.type_is_complex(T) {
 
 // op along one axis, into a tensor of the other axes: e.g. sum_axis(abs2(psi), 0) sums over bands
 @(require_results)
-reduce_axis :: proc(t: Tensor($T, $N), axis: int, $op: ReduceOp) -> Tensor(T, N - 1) where N > 1 {
+reduce_axis :: proc(
+    t: Tensor($T, $N),
+    axis: int,
+    $op: ReduceOp,
+    allocator := context.allocator,
+) -> Tensor(T, N - 1) where N > 1 {
     assert(0 <= axis && axis < N, "reduce_axis: bad axis")
     // move axis last, then every row of the loop is one output element, in row-major order
     axes: [N]int
@@ -128,7 +133,7 @@ reduce_axis :: proc(t: Tensor($T, $N), axis: int, $op: ReduceOp) -> Tensor(T, N 
     for d in 0 ..< N - 1 {
         out_shape[d] = v.shape[d]
     }
-    res := zeros(T, out_shape, t.allocator)
+    res := zeros(T, out_shape, allocator)
     n := v.shape[N - 1]
     assert(n > 0 || op == .Sum || op == .Prod, "reduce_axis: max and min need a non-empty axis")
     l := Loop(N) {
@@ -164,28 +169,36 @@ reduce_axis :: proc(t: Tensor($T, $N), axis: int, $op: ReduceOp) -> Tensor(T, N 
 }
 
 @(require_results)
-sum_axis :: proc(t: Tensor($T, $N), axis: int) -> Tensor(T, N - 1) {
-    return reduce_axis(t, axis, .Sum)
+sum_axis :: proc(t: Tensor($T, $N), axis: int, allocator := context.allocator) -> Tensor(T, N - 1) {
+    return reduce_axis(t, axis, .Sum, allocator)
 }
 
 @(require_results)
-prod_axis :: proc(t: Tensor($T, $N), axis: int) -> Tensor(T, N - 1) {
-    return reduce_axis(t, axis, .Prod)
+prod_axis :: proc(t: Tensor($T, $N), axis: int, allocator := context.allocator) -> Tensor(T, N - 1) {
+    return reduce_axis(t, axis, .Prod, allocator)
 }
 
 @(require_results)
-max_axis :: proc(t: Tensor($T, $N), axis: int) -> Tensor(T, N - 1) where !intrinsics.type_is_complex(T) {
-    return reduce_axis(t, axis, .Max)
+max_axis :: proc(
+    t: Tensor($T, $N),
+    axis: int,
+    allocator := context.allocator,
+) -> Tensor(T, N - 1) where !intrinsics.type_is_complex(T) {
+    return reduce_axis(t, axis, .Max, allocator)
 }
 
 @(require_results)
-min_axis :: proc(t: Tensor($T, $N), axis: int) -> Tensor(T, N - 1) where !intrinsics.type_is_complex(T) {
-    return reduce_axis(t, axis, .Min)
+min_axis :: proc(
+    t: Tensor($T, $N),
+    axis: int,
+    allocator := context.allocator,
+) -> Tensor(T, N - 1) where !intrinsics.type_is_complex(T) {
+    return reduce_axis(t, axis, .Min, allocator)
 }
 
 @(require_results)
-mean_axis :: proc(t: Tensor($T, $N), axis: int) -> Tensor(T, N - 1) {
-    res := reduce_axis(t, axis, .Sum)
+mean_axis :: proc(t: Tensor($T, $N), axis: int, allocator := context.allocator) -> Tensor(T, N - 1) {
+    res := reduce_axis(t, axis, .Sum, allocator)
     idivide(&res, T(f64(t.shape[axis])))
     return res
 }

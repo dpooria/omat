@@ -42,15 +42,20 @@ iapply :: proc {
 }
 
 @(require_results)
-apply_ctx :: proc(t: Tensor($T, $N), f: proc(x: T) -> T) -> Tensor(T, N) {
-    res := tensor_copy(t, t.allocator)
+apply_ctx :: proc(t: Tensor($T, $N), f: proc(x: T) -> T, allocator := context.allocator) -> Tensor(T, N) {
+    res := tensor_copy(t, allocator)
     iapply_generic(&res, f)
     return res
 }
 
 @(require_results)
-apply_ctx_1arg :: proc(t: Tensor($T, $N), f: proc(x: T, arg: T) -> T, arg: T) -> Tensor(T, N) {
-    res := tensor_copy(t, t.allocator)
+apply_ctx_1arg :: proc(
+    t: Tensor($T, $N),
+    f: proc(x: T, arg: T) -> T,
+    arg: T,
+    allocator := context.allocator,
+) -> Tensor(T, N) {
+    res := tensor_copy(t, allocator)
     iapply_generic_arg(&res, f, arg)
     return res
 }
@@ -81,8 +86,9 @@ iapply_ctxless :: proc {
 apply_ctxless_noargs :: proc(
     t: Tensor($T, $N),
     f: proc "contextless" (x: T) -> T,
+    allocator := context.allocator,
 ) -> Tensor(T, N) {
-    res := tensor_copy(t, t.allocator)
+    res := tensor_copy(t, allocator)
     iapply_generic(&res, f)
     return res
 }
@@ -92,8 +98,9 @@ apply_ctxless_1arg :: proc(
     t: Tensor($T, $N),
     f: proc "contextless" (x: T, arg: T) -> T,
     arg: T,
+    allocator := context.allocator,
 ) -> Tensor(T, N) {
-    res := tensor_copy(t, t.allocator)
+    res := tensor_copy(t, allocator)
     iapply_generic_arg(&res, f, arg)
     return res
 }

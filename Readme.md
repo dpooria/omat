@@ -27,6 +27,9 @@ and alternative libraries, including Netlib, AMD AOCL, and Intel oneMKL.
 
 - **Tensors** `Tensor(T, N)` are row-major with `data`, `shape`, `strides`, an `allocator` and a
   `borrowed` flag. Everything omat allocates is contiguous; `tensor_destroy` frees it.
+- **Memory management.** Operations that return new tensor storage take an optional `allocator`
+  and default to `context.allocator`. Set it once in a scope to allocate results in an arena,
+  or pass `allocator = ...` when a result needs a different lifetime.
 - **Views** are borrowed tensors with their own strides into another tensor's memory, which must
   outlive them: `view(t, lo, hi)`, `view_row`, `view_rows`, `transpose_view`, `permute_view`,
   `diagonal`, `broadcast_to`. They cost nothing, writes go through to the original, and every

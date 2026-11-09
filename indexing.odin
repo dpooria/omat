@@ -78,7 +78,12 @@ atv :: proc {
 
 // A copy of t[..., index, ...] along axis
 @(require_results)
-atax :: proc(t: Tensor($T, $N), index: int, axis: int = 0) -> Tensor(T, N - 1) where N > 1 {
+atax :: proc(
+    t: Tensor($T, $N),
+    index: int,
+    axis: int = 0,
+    allocator := context.allocator,
+) -> Tensor(T, N - 1) where N > 1 {
     assert(0 <= axis && axis < N)
     // bring axis to the front, then take its row
     axes: [N]int
@@ -90,7 +95,7 @@ atax :: proc(t: Tensor($T, $N), index: int, axis: int = 0) -> Tensor(T, N - 1) w
             next += 1
         }
     }
-    return tensor_copy(view_row(permute_view(t, axes[:]), index), t.allocator)
+    return tensor_copy(view_row(permute_view(t, axes[:]), index), allocator)
 }
 
 
@@ -108,9 +113,9 @@ strides :: proc(shape: [$N]int) -> [N]int {
 
 // A contiguous copy of t with a new shape of the same size, elements in row-major order
 @(require_results)
-reshape :: proc(t: Tensor($T, $N), shape: [$M]int) -> Tensor(T, M) {
+reshape :: proc(t: Tensor($T, $N), shape: [$M]int, allocator := context.allocator) -> Tensor(T, M) {
     assert(size_of_shape(shape) == size_of_shape(t.shape), "reshape: sizes differ")
-    res := zeros(T, shape, t.allocator)
+    res := zeros(T, shape, allocator)
     // res's memory seen in t's shape, so one strided pass copies in row-major order
     as_t := Tensor(T, N) {
         data     = res.data,

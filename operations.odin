@@ -5,23 +5,22 @@ import "base:intrinsics"
 import "config"
 import "core:math"
 import "core:math/cmplx"
-import "core:mem"
 import ob "openblas"
 
 // Element-wise operations on tensors and views of any strides. Every operation runs on one of two
 // kernels, unary_into and binary_into, with the operation fixed at compile time; scalars enter
-// as broadcast tensors. The copying forms allocate their result with the allocator of their
-// tensor operand; the i-forms overwrite their first tensor.
+// as broadcast tensors. The copying forms take an optional allocator; the i-forms overwrite
+// their first tensor.
 
 // -- transposes --
 
 // op(t) as a new contiguous tensor: Trans and ConjTrans transpose, ConjNoTrans conjugates
 @(require_results)
-transpose :: proc(t: Tensor($T, 2), op := ob.Transpose.Trans) -> Tensor(T, 2) {
+transpose :: proc(t: Tensor($T, 2), op := ob.Transpose.Trans, allocator := context.allocator) -> Tensor(T, 2) {
     transposed := op == .Trans || op == .ConjTrans
     conjugated := op == .ConjTrans || op == .ConjNoTrans
     shape := [2]int{t.shape[1], t.shape[0]} if transposed else t.shape
-    res := zeros(T, shape, t.allocator)
+    res := zeros(T, shape, allocator)
     when !config.DISABLE_OPENBLAS && (intrinsics.type_is_float(T) || intrinsics.type_is_complex(T)) {
         if t.strides[1] == 1 && size_of_shape(shape) > 0 {
             // OpenBLAS' blocked transpose reads rows of any stride
@@ -301,15 +300,15 @@ binary_into :: proc(out, a, b: Tensor($T, $N), $op: BinaryOp) {
 
 // op(t) into a new tensor of element type O
 @(require_results)
-unary :: proc($O: typeid, t: Tensor($T, $N), $op: UnaryOp) -> Tensor(O, N) {
-    res := zeros(O, t.shape, t.allocator)
+unary :: proc($O: typeid, t: Tensor($T, $N), $op: UnaryOp, allocator := context.allocator) -> Tensor(O, N) {
+    res := zeros(O, t.shape, allocator)
     unary_into(res, t, op)
     return res
 }
 
 // a op b into a new tensor, allocated with allocator
 @(require_results)
-binary :: proc(a, b: Tensor($T, $N), $op: BinaryOp, allocator: mem.Allocator) -> Tensor(T, N) {
+binary :: proc(a, b: Tensor($T, $N), $op: BinaryOp, allocator := context.allocator) -> Tensor(T, N) {
     res := zeros(T, a.shape, allocator)
     binary_into(res, a, b, op)
     return res
@@ -318,8 +317,8 @@ binary :: proc(a, b: Tensor($T, $N), $op: BinaryOp, allocator: mem.Allocator) ->
 // -- unary operations --
 
 @(require_results)
-neg :: proc(t: Tensor($T, $N)) -> Tensor(T, N) {
-    return unary(T, t, .Neg)
+neg :: proc(t: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) {
+    return unary(T, t, .Neg, allocator)
 }
 
 ineg :: proc(t: ^Tensor($T, $N)) {
@@ -328,8 +327,8 @@ ineg :: proc(t: ^Tensor($T, $N)) {
 
 // |t|, real for complex tensors
 @(require_results)
-abs :: proc(t: Tensor($T, $N)) -> Tensor(intrinsics.type_elem_type(T), N) {
-    return unary(intrinsics.type_elem_type(T), t, .Abs)
+abs :: proc(t: Tensor($T, $N), allocator := context.allocator) -> Tensor(intrinsics.type_elem_type(T), N) {
+    return unary(intrinsics.type_elem_type(T), t, .Abs, allocator)
 }
 
 iabs :: proc(t: ^Tensor($T, $N)) where !intrinsics.type_is_complex(T) {
@@ -338,18 +337,18 @@ iabs :: proc(t: ^Tensor($T, $N)) where !intrinsics.type_is_complex(T) {
 
 // |t|^2 element by element, real for complex tensors: densities from wave functions
 @(require_results)
-abs2 :: proc(t: Tensor($T, $N)) -> Tensor(intrinsics.type_elem_type(T), N) {
-    return unary(intrinsics.type_elem_type(T), t, .Abs2)
+abs2 :: proc(t: Tensor($T, $N), allocator := context.allocator) -> Tensor(intrinsics.type_elem_type(T), N) {
+    return unary(intrinsics.type_elem_type(T), t, .Abs2, allocator)
 }
 
 @(require_results)
-expi_f32 :: proc(t: Tensor(f32, $N)) -> Tensor(complex64, N) {
-    return unary(complex64, t, .Expi)
+expi_f32 :: proc(t: Tensor(f32, $N), allocator := context.allocator) -> Tensor(complex64, N) {
+    return unary(complex64, t, .Expi, allocator)
 }
 
 @(require_results)
-expi_f64 :: proc(t: Tensor(f64, $N)) -> Tensor(complex128, N) {
-    return unary(complex128, t, .Expi)
+expi_f64 :: proc(t: Tensor(f64, $N), allocator := context.allocator) -> Tensor(complex128, N) {
+    return unary(complex128, t, .Expi, allocator)
 }
 
 // e^(i t) of real phases, e.g. structure factors e^(-i G.tau)
@@ -359,27 +358,29 @@ expi :: proc {
 }
 
 @(require_results)
-erf :: proc(t: Tensor($T, $N)) -> Tensor(T, N) where intrinsics.type_is_float(T) {
-    return unary(T, t, .Erf)
+erf :: proc(t: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) where intrinsics.type_is_float(T) {
+    return unary(T, t, .Erf, allocator)
 }
 
 @(require_results)
-erfc :: proc(t: Tensor($T, $N)) -> Tensor(T, N) where intrinsics.type_is_float(T) {
-    return unary(T, t, .Erfc)
+erfc :: proc(t: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) where intrinsics.type_is_float(T) {
+    return unary(T, t, .Erfc, allocator)
 }
 
 @(require_results)
 real :: proc(
     t: Tensor($C, $N),
+    allocator := context.allocator,
 ) -> Tensor(intrinsics.type_elem_type(C), N) where intrinsics.type_is_complex(C) {
-    return unary(intrinsics.type_elem_type(C), t, .Real)
+    return unary(intrinsics.type_elem_type(C), t, .Real, allocator)
 }
 
 @(require_results)
 imag :: proc(
     t: Tensor($C, $N),
+    allocator := context.allocator,
 ) -> Tensor(intrinsics.type_elem_type(C), N) where intrinsics.type_is_complex(C) {
-    return unary(intrinsics.type_elem_type(C), t, .Imag)
+    return unary(intrinsics.type_elem_type(C), t, .Imag, allocator)
 }
 
 conjugate_scalar :: proc(x: $T) -> T where intrinsics.type_is_numeric(T) {
@@ -391,8 +392,8 @@ conjugate_scalar :: proc(x: $T) -> T where intrinsics.type_is_numeric(T) {
 }
 
 @(require_results)
-conjugate_tensor :: proc(t: Tensor($T, $N)) -> Tensor(T, N) {
-    return unary(T, t, .Conj)
+conjugate_tensor :: proc(t: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) {
+    return unary(T, t, .Conj, allocator)
 }
 
 // complex conjugate, the identity for real types
@@ -409,83 +410,83 @@ iconjugate :: proc(t: ^Tensor($T, $N)) {
 
 // Real functions, applied element by element
 @(require_results)
-sqrt :: proc(t: Tensor($T, $N)) -> Tensor(T, N) {
-    return unary(T, t, .Sqrt)
+sqrt :: proc(t: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) {
+    return unary(T, t, .Sqrt, allocator)
 }
 
 @(require_results)
-exp :: proc(t: Tensor($T, $N)) -> Tensor(T, N) {
-    return unary(T, t, .Exp)
+exp :: proc(t: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) {
+    return unary(T, t, .Exp, allocator)
 }
 // natural logarithm
 @(require_results)
-log :: proc(t: Tensor($T, $N)) -> Tensor(T, N) {
-    return unary(T, t, .Log)
+log :: proc(t: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) {
+    return unary(T, t, .Log, allocator)
 }
 
 @(require_results)
-log10 :: proc(t: Tensor($T, $N)) -> Tensor(T, N) {
-    return unary(T, t, .Log10)
+log10 :: proc(t: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) {
+    return unary(T, t, .Log10, allocator)
 }
 
 @(require_results)
-cos :: proc(t: Tensor($T, $N)) -> Tensor(T, N) {
-    return unary(T, t, .Cos)
+cos :: proc(t: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) {
+    return unary(T, t, .Cos, allocator)
 }
 
 @(require_results)
-sin :: proc(t: Tensor($T, $N)) -> Tensor(T, N) {
-    return unary(T, t, .Sin)
+sin :: proc(t: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) {
+    return unary(T, t, .Sin, allocator)
 }
 
 @(require_results)
-tan :: proc(t: Tensor($T, $N)) -> Tensor(T, N) {
-    return unary(T, t, .Tan)
+tan :: proc(t: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) {
+    return unary(T, t, .Tan, allocator)
 }
 
 @(require_results)
-acos :: proc(t: Tensor($T, $N)) -> Tensor(T, N) {
-    return unary(T, t, .Acos)
+acos :: proc(t: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) {
+    return unary(T, t, .Acos, allocator)
 }
 
 @(require_results)
-asin :: proc(t: Tensor($T, $N)) -> Tensor(T, N) {
-    return unary(T, t, .Asin)
+asin :: proc(t: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) {
+    return unary(T, t, .Asin, allocator)
 }
 
 @(require_results)
-atan :: proc(t: Tensor($T, $N)) -> Tensor(T, N) {
-    return unary(T, t, .Atan)
+atan :: proc(t: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) {
+    return unary(T, t, .Atan, allocator)
 }
 
 @(require_results)
-cosh :: proc(t: Tensor($T, $N)) -> Tensor(T, N) {
-    return unary(T, t, .Cosh)
+cosh :: proc(t: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) {
+    return unary(T, t, .Cosh, allocator)
 }
 
 @(require_results)
-sinh :: proc(t: Tensor($T, $N)) -> Tensor(T, N) {
-    return unary(T, t, .Sinh)
+sinh :: proc(t: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) {
+    return unary(T, t, .Sinh, allocator)
 }
 
 @(require_results)
-tanh :: proc(t: Tensor($T, $N)) -> Tensor(T, N) {
-    return unary(T, t, .Tanh)
+tanh :: proc(t: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) {
+    return unary(T, t, .Tanh, allocator)
 }
 
 @(require_results)
-acosh :: proc(t: Tensor($T, $N)) -> Tensor(T, N) {
-    return unary(T, t, .Acosh)
+acosh :: proc(t: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) {
+    return unary(T, t, .Acosh, allocator)
 }
 
 @(require_results)
-asinh :: proc(t: Tensor($T, $N)) -> Tensor(T, N) {
-    return unary(T, t, .Asinh)
+asinh :: proc(t: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) {
+    return unary(T, t, .Asinh, allocator)
 }
 
 @(require_results)
-atanh :: proc(t: Tensor($T, $N)) -> Tensor(T, N) {
-    return unary(T, t, .Atanh)
+atanh :: proc(t: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) {
+    return unary(T, t, .Atanh, allocator)
 }
 
 isqrt :: proc(t: ^Tensor($T, $N)) {
@@ -555,22 +556,23 @@ iatanh :: proc(t: ^Tensor($T, $N)) {
 // -- binary operations: tensor op tensor, tensor op scalar, scalar op tensor --
 
 @(require_results)
-multiply_tensors :: proc(a, b: Tensor($T, $N)) -> Tensor(T, N) {
-    return binary(a, b, .Multiply, a.allocator)
+multiply_tensors :: proc(a, b: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) {
+    return binary(a, b, .Multiply, allocator)
 }
 
 @(require_results)
-multiply_scalar :: proc(t: Tensor($T, $N), alpha: T) -> Tensor(T, N) {
+multiply_scalar :: proc(t: Tensor($T, $N), alpha: T, allocator := context.allocator) -> Tensor(T, N) {
     alpha := alpha
-    return binary(t, broadcast(&alpha, t.shape), .Multiply, t.allocator)
+    return binary(t, broadcast(&alpha, t.shape), .Multiply, allocator)
 }
 
 @(require_results)
 multiply_scalar2 :: proc(
     alpha: $T,
     t: Tensor(T, $N),
+    allocator := context.allocator,
 ) -> Tensor(T, N) where intrinsics.type_is_numeric(T) {
-    return multiply_scalar(t, alpha)
+    return multiply_scalar(t, alpha, allocator)
 }
 multiply :: proc {
     multiply_tensors,
@@ -579,22 +581,23 @@ multiply :: proc {
 }
 
 @(require_results)
-add_tensors :: proc(a, b: Tensor($T, $N)) -> Tensor(T, N) {
-    return binary(a, b, .Add, a.allocator)
+add_tensors :: proc(a, b: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) {
+    return binary(a, b, .Add, allocator)
 }
 
 @(require_results)
-add_scalar :: proc(t: Tensor($T, $N), alpha: T) -> Tensor(T, N) {
+add_scalar :: proc(t: Tensor($T, $N), alpha: T, allocator := context.allocator) -> Tensor(T, N) {
     alpha := alpha
-    return binary(t, broadcast(&alpha, t.shape), .Add, t.allocator)
+    return binary(t, broadcast(&alpha, t.shape), .Add, allocator)
 }
 
 @(require_results)
 add_scalar2 :: proc(
     alpha: $T,
     t: Tensor(T, $N),
+    allocator := context.allocator,
 ) -> Tensor(T, N) where intrinsics.type_is_numeric(T) {
-    return add_scalar(t, alpha)
+    return add_scalar(t, alpha, allocator)
 }
 add :: proc {
     add_tensors,
@@ -603,14 +606,14 @@ add :: proc {
 }
 
 @(require_results)
-subtract_tensors :: proc(a, b: Tensor($T, $N)) -> Tensor(T, N) {
-    return binary(a, b, .Subtract, a.allocator)
+subtract_tensors :: proc(a, b: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) {
+    return binary(a, b, .Subtract, allocator)
 }
 
 @(require_results)
-subtract_scalar :: proc(t: Tensor($T, $N), alpha: T) -> Tensor(T, N) {
+subtract_scalar :: proc(t: Tensor($T, $N), alpha: T, allocator := context.allocator) -> Tensor(T, N) {
     alpha := alpha
-    return binary(t, broadcast(&alpha, t.shape), .Subtract, t.allocator)
+    return binary(t, broadcast(&alpha, t.shape), .Subtract, allocator)
 }
 
 // alpha - t
@@ -618,9 +621,10 @@ subtract_scalar :: proc(t: Tensor($T, $N), alpha: T) -> Tensor(T, N) {
 subtract_scalar2 :: proc(
     alpha: $T,
     t: Tensor(T, $N),
+    allocator := context.allocator,
 ) -> Tensor(T, N) where intrinsics.type_is_numeric(T) {
     alpha := alpha
-    return binary(broadcast(&alpha, t.shape), t, .Subtract, t.allocator)
+    return binary(broadcast(&alpha, t.shape), t, .Subtract, allocator)
 }
 
 subtract :: proc {
@@ -630,23 +634,24 @@ subtract :: proc {
 }
 
 @(require_results)
-divide_tensors :: proc(a, b: Tensor($T, $N)) -> Tensor(T, N) {
-    return binary(a, b, .Divide, a.allocator)
+divide_tensors :: proc(a, b: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) {
+    return binary(a, b, .Divide, allocator)
 }
 
 @(require_results)
-divide_scalar :: proc(t: Tensor($T, $N), alpha: T) -> Tensor(T, N) {
+divide_scalar :: proc(t: Tensor($T, $N), alpha: T, allocator := context.allocator) -> Tensor(T, N) {
     alpha := alpha
-    return binary(t, broadcast(&alpha, t.shape), .Divide, t.allocator)
+    return binary(t, broadcast(&alpha, t.shape), .Divide, allocator)
 }
 // alpha / t
 @(require_results)
 divide_scalar2 :: proc(
     alpha: $T,
     t: Tensor(T, $N),
+    allocator := context.allocator,
 ) -> Tensor(T, N) where intrinsics.type_is_numeric(T) {
     alpha := alpha
-    return binary(broadcast(&alpha, t.shape), t, .Divide, t.allocator)
+    return binary(broadcast(&alpha, t.shape), t, .Divide, allocator)
 }
 
 divide :: proc {
@@ -656,23 +661,24 @@ divide :: proc {
 }
 
 @(require_results)
-pow_tensors :: proc(a, b: Tensor($T, $N)) -> Tensor(T, N) {
-    return binary(a, b, .Pow, a.allocator)
+pow_tensors :: proc(a, b: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) {
+    return binary(a, b, .Pow, allocator)
 }
 
 @(require_results)
-pow_scalar :: proc(t: Tensor($T, $N), power: T) -> Tensor(T, N) {
+pow_scalar :: proc(t: Tensor($T, $N), power: T, allocator := context.allocator) -> Tensor(T, N) {
     power := power
-    return binary(t, broadcast(&power, t.shape), .Pow, t.allocator)
+    return binary(t, broadcast(&power, t.shape), .Pow, allocator)
 }
 // alpha^t
 @(require_results)
 pow_scalar2 :: proc(
     alpha: $T,
     t: Tensor(T, $N),
+    allocator := context.allocator,
 ) -> Tensor(T, N) where intrinsics.type_is_numeric(T) {
     alpha := alpha
-    return binary(broadcast(&alpha, t.shape), t, .Pow, t.allocator)
+    return binary(broadcast(&alpha, t.shape), t, .Pow, allocator)
 }
 
 pow :: proc {
@@ -812,8 +818,8 @@ iclip :: proc(t: ^Tensor($T, $N), lo, hi: T) where !intrinsics.type_is_complex(T
 }
 
 @(require_results)
-clip :: proc(t: Tensor($T, $N), lo, hi: T) -> Tensor(T, N) where !intrinsics.type_is_complex(T) {
-    res := tensor_copy(t, t.allocator)
+clip :: proc(t: Tensor($T, $N), lo, hi: T, allocator := context.allocator) -> Tensor(T, N) where !intrinsics.type_is_complex(T) {
+    res := tensor_copy(t, allocator)
     iclip(&res, lo, hi)
     return res
 }
