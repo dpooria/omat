@@ -2,6 +2,7 @@ package omat
 
 import "base:builtin"
 import "base:intrinsics"
+import "config"
 import "core:math"
 import "core:math/cmplx"
 import "core:mem"
@@ -21,7 +22,7 @@ transpose :: proc(t: Tensor($T, 2), op := ob.Transpose.Trans) -> Tensor(T, 2) {
     conjugated := op == .ConjTrans || op == .ConjNoTrans
     shape := [2]int{t.shape[1], t.shape[0]} if transposed else t.shape
     res := zeros(T, shape, t.allocator)
-    when intrinsics.type_is_float(T) || intrinsics.type_is_complex(T) {
+    when !config.DISABLE_OPENBLAS && (intrinsics.type_is_float(T) || intrinsics.type_is_complex(T)) {
         if t.strides[1] == 1 && size_of_shape(shape) > 0 {
             // OpenBLAS' blocked transpose reads rows of any stride
             blas_op := op
@@ -56,7 +57,7 @@ itranspose :: proc(t: ^Tensor($T, 2), op := ob.Transpose.Trans) {
     assert_contiguous(t^)
     transposed := op == .Trans || op == .ConjTrans
     shape := [2]int{t.shape[1], t.shape[0]} if transposed else t.shape
-    when intrinsics.type_is_float(T) || intrinsics.type_is_complex(T) {
+    when !config.DISABLE_OPENBLAS && (intrinsics.type_is_float(T) || intrinsics.type_is_complex(T)) {
         blas_op := op
         when !intrinsics.type_is_complex(T) {
             blas_op = .Trans if transposed else .NoTrans

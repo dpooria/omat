@@ -36,13 +36,13 @@ package openblas
 
 import "../config"
 
-foreign import openblas_lapacke {config.OPENBLAS}
+foreign import lapacke {config.LAPACKE}
 
 LAPACK_WORK_MEMORY_ERROR :: -1010
 LAPACK_TRANSPOSE_MEMORY_ERROR :: -1011
 
 @(default_calling_convention = "c", link_prefix = "LAPACKE_")
-foreign openblas_lapacke {
+foreign lapacke {
     /* ------------------------------ Linear Solvers (AX = B) ------------------------- */
     sgesv :: proc(matrix_layout: Order, n: blasint, nrhs: blasint, a: [^]f32, lda: blasint, ipiv: [^]blasint, b: [^]f32, ldb: blasint) -> blasint ---
     dgesv :: proc(matrix_layout: Order, n: blasint, nrhs: blasint, a: [^]f64, lda: blasint, ipiv: [^]blasint, b: [^]f64, ldb: blasint) -> blasint ---

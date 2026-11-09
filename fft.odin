@@ -377,16 +377,19 @@ set_num_threads :: proc(n: int) {
         fftw.plan_with_nthreads(c.int(n))
         fftw.f_plan_with_nthreads(c.int(n))
     }
-    when config.USE_OPENBLAS_THREADS {
-        if n > 1 && ob.openblas_get_parallel() == ob.SEQUENTIAL {
-            log.warn(
-                "omat: linked OpenBLAS is sequential. " +
-                "Set -define:OMAT_OPENBLAS to a threaded build to use more than one thread.",
-            )
+
+    when !config.DISABLE_OPENBLAS {
+        when config.USE_OPENBLAS_THREADS {
+            if n > 1 && ob.openblas_get_parallel() == ob.SEQUENTIAL {
+                log.warn(
+                    "omat: linked OpenBLAS is sequential. " +
+                    "Set -define:OMAT_OPENBLAS to a threaded build to use more than one thread.",
+                )
+            }
+            ob.openblas_set_num_threads(c.int(n))
+        } else {
+            ob.openblas_set_num_threads(1)
         }
-        ob.openblas_set_num_threads(c.int(n))
-    } else {
-        ob.openblas_set_num_threads(1)
     }
 }
 

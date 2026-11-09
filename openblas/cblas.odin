@@ -3,21 +3,16 @@ package openblas
 import "core:c"
 
 import "../config"
-foreign import openblas_cblas {config.OPENBLAS}
+foreign import cblas {config.BLAS}
 
 // A stripped-down version of https://github.com/kalsprite/odin-openblas.git
 
 @(default_calling_convention = "c", link_prefix = "cblas_")
-foreign openblas_cblas {
+foreign cblas {
     sdsdot :: proc(n: blasint, alpha: f32, x: [^]f32, incx: blasint, y: [^]f32, incy: blasint) -> f32 ---
     dsdot :: proc(n: blasint, x: [^]f32, incx: blasint, y: [^]f32, incy: blasint) -> f64 ---
     sdot :: proc(n: blasint, x: [^]f32, incx: blasint, y: [^]f32, incy: blasint) -> f32 ---
     ddot :: proc(n: blasint, x: [^]f64, incx: blasint, y: [^]f64, incy: blasint) -> f64 ---
-
-    cdotu :: proc(n: blasint, x: [^]complex64, incx: blasint, y: [^]complex64, incy: blasint) -> complex64 ---
-    cdotc :: proc(n: blasint, x: [^]complex64, incx: blasint, y: [^]complex64, incy: blasint) -> complex64 ---
-    zdotu :: proc(n: blasint, x: [^]complex128, incx: blasint, y: [^]complex128, incy: blasint) -> complex128 ---
-    zdotc :: proc(n: blasint, x: [^]complex128, incx: blasint, y: [^]complex128, incy: blasint) -> complex128 ---
 
     sasum :: proc(n: blasint, x: [^]f32, incx: blasint) -> f32 ---
     dasum :: proc(n: blasint, x: [^]f64, incx: blasint) -> f64 ---
@@ -194,29 +189,41 @@ foreign openblas_cblas {
     xerbla :: proc(p: blasint, rout: cstring, form: cstring, #c_vararg _: ..any) ---
 
     // BLAS extensions
-    saxpby :: proc(n: blasint, alpha: f32, x: [^]f32, incx: blasint, beta: f32, y: [^]f32, incy: blasint) ---
-    daxpby :: proc(n: blasint, alpha: f64, x: [^]f64, incx: blasint, beta: f64, y: [^]f64, incy: blasint) ---
-    caxpby :: proc(n: blasint, alpha: ^complex64, x: [^]complex64, incx: blasint, beta: ^complex64, y: [^]complex64, incy: blasint) ---
-    zaxpby :: proc(n: blasint, alpha: ^complex128, x: [^]complex128, incx: blasint, beta: ^complex128, y: [^]complex128, incy: blasint) ---
+    when !config.DISABLE_OPENBLAS {
+        cdotu :: proc(n: blasint, x: [^]complex64, incx: blasint, y: [^]complex64, incy: blasint) -> complex64 ---
+        cdotc :: proc(n: blasint, x: [^]complex64, incx: blasint, y: [^]complex64, incy: blasint) -> complex64 ---
+        zdotu :: proc(n: blasint, x: [^]complex128, incx: blasint, y: [^]complex128, incy: blasint) -> complex128 ---
+        zdotc :: proc(n: blasint, x: [^]complex128, incx: blasint, y: [^]complex128, incy: blasint) -> complex128 ---
 
-    somatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: f32, a: [^]f32, lda: blasint, b: [^]f32, ldb: blasint) ---
-    domatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: f64, a: [^]f64, lda: blasint, b: [^]f64, ldb: blasint) ---
-    comatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: ^complex64, a: [^]complex64, lda: blasint, b: [^]complex64, ldb: blasint) ---
-    zomatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: ^complex128, a: [^]complex128, lda: blasint, b: [^]complex128, ldb: blasint) ---
+        saxpby :: proc(n: blasint, alpha: f32, x: [^]f32, incx: blasint, beta: f32, y: [^]f32, incy: blasint) ---
+        daxpby :: proc(n: blasint, alpha: f64, x: [^]f64, incx: blasint, beta: f64, y: [^]f64, incy: blasint) ---
+        caxpby :: proc(n: blasint, alpha: ^complex64, x: [^]complex64, incx: blasint, beta: ^complex64, y: [^]complex64, incy: blasint) ---
+        zaxpby :: proc(n: blasint, alpha: ^complex128, x: [^]complex128, incx: blasint, beta: ^complex128, y: [^]complex128, incy: blasint) ---
+
+        somatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: f32, a: [^]f32, lda: blasint, b: [^]f32, ldb: blasint) ---
+        domatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: f64, a: [^]f64, lda: blasint, b: [^]f64, ldb: blasint) ---
+        comatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: ^complex64, a: [^]complex64, lda: blasint, b: [^]complex64, ldb: blasint) ---
+        zomatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: ^complex128, a: [^]complex128, lda: blasint, b: [^]complex128, ldb: blasint) ---
 
 
-    simatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: f32, a: [^]f32, lda: blasint, rda: blasint) ---
-    dimatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: f64, a: [^]f64, lda: blasint, rda: blasint) ---
-    cimatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: ^complex64, a: [^]complex64, lda: blasint, ldb: blasint) ---
-    zimatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: ^complex128, a: [^]complex128, lda: blasint, ldb: blasint) ---
+        simatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: f32, a: [^]f32, lda: blasint, rda: blasint) ---
+        dimatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: f64, a: [^]f64, lda: blasint, rda: blasint) ---
+        cimatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: ^complex64, a: [^]complex64, lda: blasint, ldb: blasint) ---
+        zimatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: ^complex128, a: [^]complex128, lda: blasint, ldb: blasint) ---
 
-    sgemm_batch :: proc(order: Order, TransA_array: [^]Transpose, TransB_array: [^]Transpose, M_array: [^]blasint, N_array: [^]blasint, K_array: [^]blasint, alpha_array: [^]f32, A_array: [^][^]f32, lda_array: [^]blasint, B_array: [^][^]f32, ldb_array: [^]blasint, beta_array: [^]f32, C_array: [^][^]f32, ldc_array: [^]blasint, group_count: blasint, group_size: [^]blasint) ---
+        sgemm_batch :: proc(order: Order, TransA_array: [^]Transpose, TransB_array: [^]Transpose, M_array: [^]blasint, N_array: [^]blasint, K_array: [^]blasint, alpha_array: [^]f32, A_array: [^][^]f32, lda_array: [^]blasint, B_array: [^][^]f32, ldb_array: [^]blasint, beta_array: [^]f32, C_array: [^][^]f32, ldc_array: [^]blasint, group_count: blasint, group_size: [^]blasint) ---
 
-    dgemm_batch :: proc(order: Order, TransA_array: [^]Transpose, TransB_array: [^]Transpose, M_array: [^]blasint, N_array: [^]blasint, K_array: [^]blasint, alpha_array: [^]f64, A_array: [^][^]f64, lda_array: [^]blasint, B_array: [^][^]f64, ldb_array: [^]blasint, beta_array: [^]f64, C_array: [^][^]f64, ldc_array: [^]blasint, group_count: blasint, group_size: [^]blasint) ---
+        dgemm_batch :: proc(order: Order, TransA_array: [^]Transpose, TransB_array: [^]Transpose, M_array: [^]blasint, N_array: [^]blasint, K_array: [^]blasint, alpha_array: [^]f64, A_array: [^][^]f64, lda_array: [^]blasint, B_array: [^][^]f64, ldb_array: [^]blasint, beta_array: [^]f64, C_array: [^][^]f64, ldc_array: [^]blasint, group_count: blasint, group_size: [^]blasint) ---
 
-    cgemm_batch :: proc(order: Order, TransA_array: [^]Transpose, TransB_array: [^]Transpose, M_array: [^]blasint, N_array: [^]blasint, K_array: [^]blasint, alpha_array: [^]complex64, A_array: [^][^]complex64, lda_array: [^]blasint, B_array: [^][^]complex64, ldb_array: [^]blasint, beta_array: [^]complex64, C_array: [^][^]complex64, ldc_array: [^]blasint, group_count: blasint, group_size: [^]blasint) ---
+        cgemm_batch :: proc(order: Order, TransA_array: [^]Transpose, TransB_array: [^]Transpose, M_array: [^]blasint, N_array: [^]blasint, K_array: [^]blasint, alpha_array: [^]complex64, A_array: [^][^]complex64, lda_array: [^]blasint, B_array: [^][^]complex64, ldb_array: [^]blasint, beta_array: [^]complex64, C_array: [^][^]complex64, ldc_array: [^]blasint, group_count: blasint, group_size: [^]blasint) ---
 
-    zgemm_batch :: proc(order: Order, TransA_array: [^]Transpose, TransB_array: [^]Transpose, M_array: [^]blasint, N_array: [^]blasint, K_array: [^]blasint, alpha_array: [^]complex128, A_array: [^][^]complex128, lda_array: [^]blasint, B_array: [^][^]complex128, ldb_array: [^]blasint, beta_array: [^]complex128, C_array: [^][^]complex128, ldc_array: [^]blasint, group_count: blasint, group_size: [^]blasint) ---
+        zgemm_batch :: proc(order: Order, TransA_array: [^]Transpose, TransB_array: [^]Transpose, M_array: [^]blasint, N_array: [^]blasint, K_array: [^]blasint, alpha_array: [^]complex128, A_array: [^][^]complex128, lda_array: [^]blasint, B_array: [^][^]complex128, ldb_array: [^]blasint, beta_array: [^]complex128, C_array: [^][^]complex128, ldc_array: [^]blasint, group_count: blasint, group_size: [^]blasint) ---
+    } else {
+        cdotc_sub :: proc(n: blasint, x: [^]complex64, incx: blasint, y: [^]complex64, incy: blasint, result: ^complex64) ---
 
+        cdotu_sub :: proc(n: blasint, x: [^]complex64, incx: blasint, y: [^]complex64, incy: blasint, result: ^complex64) ---
+        zdotc_sub :: proc(n: blasint, x: [^]complex128, incx: blasint, y: [^]complex128, incy: blasint, result: ^complex128) ---
+        zdotu_sub :: proc(n: blasint, x: [^]complex128, incx: blasint, y: [^]complex128, incy: blasint, result: ^complex128) ---
+    }
 }
 

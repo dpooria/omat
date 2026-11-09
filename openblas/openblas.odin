@@ -3,9 +3,9 @@ package openblas
 import "../config"
 import "core:c"
 
-foreign import openblas {config.OPENBLAS}
+when !config.DISABLE_OPENBLAS do foreign import openblas {config.OPENBLAS}
 
-blasint :: i64 when config.OPENBLAS_ILP64 else i32
+blasint :: i64 when config.BLAS_ILP64 else i32
 /*Set the threading backend to a custom callback.*/
 openblas_dojob_callback :: proc "c" (thread_num: c.int, jobdata: rawptr, dojob_data: c.int)
 
@@ -88,30 +88,32 @@ JobSVD :: enum c.char {
 }
 
 
-@(default_calling_convention = "c")
-foreign openblas {
-    /*Set the number of threads on runtime.*/
-    openblas_set_num_threads :: proc(num_threads: c.int) ---
-    goto_set_num_threads :: proc(num_threads: c.int) ---
-    openblas_set_num_threads_local :: proc(num_threads: c.int) -> c.int ---
+when !config.DISABLE_OPENBLAS {
+    @(default_calling_convention = "c")
+    foreign openblas {
+        /*Set the number of threads on runtime.*/
+        openblas_set_num_threads :: proc(num_threads: c.int) ---
+        goto_set_num_threads :: proc(num_threads: c.int) ---
+        openblas_set_num_threads_local :: proc(num_threads: c.int) -> c.int ---
 
-    /*Get the number of threads on runtime.*/
-    openblas_get_num_threads :: proc() -> c.int ---
+        /*Get the number of threads on runtime.*/
+        openblas_get_num_threads :: proc() -> c.int ---
 
-    /*Get the number of physical processors (cores).*/
-    openblas_get_num_procs :: proc() -> c.int ---
+        /*Get the number of physical processors (cores).*/
+        openblas_get_num_procs :: proc() -> c.int ---
 
-    /*Get the build configure on runtime.*/
-    openblas_get_config :: proc() -> cstring ---
+        /*Get the build configure on runtime.*/
+        openblas_get_config :: proc() -> cstring ---
 
-    /*Get the CPU corename on runtime.*/
-    openblas_get_corename :: proc() -> cstring ---
+        /*Get the CPU corename on runtime.*/
+        openblas_get_corename :: proc() -> cstring ---
 
-    /*Set the threading backend to a custom callback.*/
-    openblas_set_threads_callback_function :: proc(callback: openblas_threads_callback) ---
+        /*Set the threading backend to a custom callback.*/
+        openblas_set_threads_callback_function :: proc(callback: openblas_threads_callback) ---
 
-    /* Get the parallelization type which is used by OpenBLAS */
-    openblas_get_parallel :: proc() -> c.int ---
+        /* Get the parallelization type which is used by OpenBLAS */
+        openblas_get_parallel :: proc() -> c.int ---
 
+    }
 }
 
