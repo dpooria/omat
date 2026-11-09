@@ -1,7 +1,6 @@
 # omat
 
-Dense numerics for Odin on OpenBLAS and FFTW: n-dimensional tensors with strided views,
-element-wise math, BLAS products, einsum, LAPACK decompositions, FFTs, and special functions.
+omat is a numerical computing library for Odin. It provides n-dimensional tensors with strided views, element-wise operations, tensor contractions with `einsum`, BLAS matrix and vector operations, LAPACK solvers and decompositions, FFTs, and special functions. It uses OpenBLAS and FFTW by default and supports compatible alternatives through build flags.
 
 ```odin
 import om "omat"
@@ -13,8 +12,16 @@ w, V, err := om.eigh(H, S, count = nbands) // lowest bands of H v = w S v
 
 ## Requirements
 
-System libraries `openblas64` (ILP64 OpenBLAS with LAPACKE), `fftw3`, `fftw3f` and their
-`_threads` variants. Tests: `odin test test/`.
+The default build requires Odin and these system libraries.
+
+- OpenBLAS (`openblas`) with CBLAS and LAPACKE support, using 32-bit BLAS integers (LP64).
+- FFTW for double and single precision (`fftw3` and `fftw3f`), with the pthread libraries
+  `fftw3_threads` and `fftw3f_threads`.
+
+Use `-define:OMAT_USE_FFTW_THREADS=false` to build with just the base FFTW libraries.
+Use `-define:OMAT_BLAS_ILP64=true` with matching ILP64 BLAS and LAPACKE libraries to use
+64-bit BLAS integers. The [configuration examples](examples/config.sh) cover these options
+and alternative libraries, including Netlib, AMD AOCL, and Intel oneMKL.
 
 ## Conventions
 
@@ -57,6 +64,8 @@ from the strides.
 
 ## Examples
 
+See the [examples directory](examples/).
+
 ```odin
 S_sub := om.braket(psi, Spsi)                         // <psi_i|S|psi_j>
 H_sub := om.braket(psi, Hpsi)
@@ -82,6 +91,10 @@ f_q := om.bessel_transform(l, r, f, w_r, q)
 ylm := om.ylm_real(lmax, g_vectors)                   // Y_lm of every G-vector direction
 G := om.gaunt(l1, m1, l2, m2, l3, m3)
 ```
+
+## Tests
+
+Run `odin test test/` from the repository root.
 
 ## Notes
 
