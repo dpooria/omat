@@ -249,8 +249,9 @@ unary_into :: proc(out: Tensor($O, $N), a: Tensor($T, N), $op: UnaryOp) {
     l := plan_loop(a.shape, out.strides, a.strides)
     so, sa := loop_step(l, out.strides), loop_step(l, a.strides)
     if l.flat && so == 1 && sa == 1 {
-        for x, k in a.data[:l.n] {
-            out.data[k] = unary_value(O, x, op)
+        out, a := out.data[:l.n], a.data[:l.n]
+        for &x, k in out {
+            x = unary_value(O, a[k], op)
         }
         return
     }
@@ -271,20 +272,21 @@ binary_into :: proc(out, a, b: Tensor($T, $N), $op: BinaryOp) {
         out := out.data[:l.n]
         switch {
         case sa == 1 && sb == 1:
+            a, b := a.data[:l.n], b.data[:l.n]
             for &x, k in out {
-                x = binary_value(a.data[k], b.data[k], op)
+                x = binary_value(a[k], b[k], op)
             }
             return
         case sa == 1 && sb == 0:
-            y := b.data[0]
+            a, y := a.data[:l.n], b.data[0]
             for &x, k in out {
-                x = binary_value(a.data[k], y, op)
+                x = binary_value(a[k], y, op)
             }
             return
         case sa == 0 && sb == 1:
-            y := a.data[0]
+            y, b := a.data[0], b.data[:l.n]
             for &x, k in out {
-                x = binary_value(y, b.data[k], op)
+                x = binary_value(y, b[k], op)
             }
             return
         }
@@ -791,6 +793,13 @@ iaxpby :: proc(y: ^Tensor($T, $N), alpha: T, x: Tensor(T, N), beta: T) {
     assert(y.shape == x.shape, "axpby: shapes differ")
     l := plan_loop(y.shape, y.strides, x.strides)
     sy, sx := loop_step(l, y.strides), loop_step(l, x.strides)
+    if l.flat && sy == 1 && sx == 1 {
+        y, x := y.data[:l.n], x.data[:l.n]
+        for &v, k in y {
+            v = alpha * x[k] + beta * v
+        }
+        return
+    }
     for r in 0 ..< l.rows {
         py, px := row_offset(l, r, y.strides), row_offset(l, r, x.strides)
         for k in 0 ..< l.n {

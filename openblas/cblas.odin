@@ -64,8 +64,8 @@ foreign cblas {
     icmin :: proc(n: blasint, x: [^]complex64, incx: blasint) -> c.size_t ---
     izmin :: proc(n: blasint, x: [^]complex128, incx: blasint) -> c.size_t ---
 
-    saxpy :: proc(n: blasint, alpha: f32, x: [^]f32, incx: blasint, y: [^]f32, incy: blasint) -> f32 ---
-    daxpy :: proc(n: blasint, alpha: f64, x: [^]f64, incx: blasint, y: [^]f64, incy: blasint) -> f64 ---
+    saxpy :: proc(n: blasint, alpha: f32, x: [^]f32, incx: blasint, y: [^]f32, incy: blasint) ---
+    daxpy :: proc(n: blasint, alpha: f64, x: [^]f64, incx: blasint, y: [^]f64, incy: blasint) ---
     caxpy :: proc(n: blasint, alpha: ^complex64, x: [^]complex64, incx: blasint, y: [^]complex64, incy: blasint) ---
     zaxpy :: proc(n: blasint, alpha: ^complex128, x: [^]complex128, incx: blasint, y: [^]complex128, incy: blasint) ---
 
