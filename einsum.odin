@@ -1,7 +1,6 @@
 package omat
 
-import "base:intrinsics"
-import "core:fmt"
+import "config"
 import "core:strings"
 
 import ob "openblas"
@@ -10,13 +9,12 @@ import ob "openblas"
 // "ij,jk->ik" (matmul), "bij,bjk->bik" (batched matmul), "i,j->ij" (outer), "ij->ji",
 // "ij->j" (sum), "ii->i" (diagonal), "ii->" (trace). to Conjugate: "ig*,jg->ij"
 //
-// Two operands in which no label repeats, and every summed label appears in both, become a
-// gemm, one per entry of the labels shared by A, B and the output. Operands
-// that are not already laid out for gemm are copied first; conjugation is free.
-// Everything else runs as a direct loop over all labels.
+// Two operands in which no label repeats, and every summed label appears in both, become one
+// batched gemm over the labels shared by A, B and the output. Operands not already laid out for
+// gemm are copied first; conjugation is free. Everything else is one strided loop over all labels.
 
 // Operand and output labels of "ab*,bc->ac", without the * (conjugated operands);
-// pass b as empty for one operand.
+// b is empty for one operand.
 parse_einsum :: proc(spec: string) -> (a, b, out: string, conj_a, conj_b: bool) {
     arrow := strings.index(spec, "->")
     assert(arrow >= 0, "einsum: the output labels (\"->...\") must be given")
@@ -33,26 +31,16 @@ parse_einsum :: proc(spec: string) -> (a, b, out: string, conj_a, conj_b: bool) 
     return a, b, out, conj_a, conj_b
 }
 
-// size of every label, -1 for letters not used
-EinsumSizes :: [128]int
-
-// Parse spec and check it against the operand shapes (b_shape = nil for one operand).
+// The size of every label (-1 for letters not used), checked against the operand shapes
 @(private)
-einsum_labels :: proc(
-    spec: string,
-    a_shape, b_shape: []int,
-) -> (
-    a, b, out: string,
-    conj_a, conj_b: bool,
-    sizes: EinsumSizes,
-) {
-    a, b, out, conj_a, conj_b = parse_einsum(spec)
-    assert((b != "") == (b_shape != nil), "einsum: the labels name a different number of operands")
+einsum_sizes :: proc(a, b, out: string, a_shape: [$NA]int, b_shape: [$NB]int) -> [128]int {
+    sizes: [128]int
     for &size in sizes {
         size = -1
     }
+    a_shape, b_shape := a_shape, b_shape
     operands := [2]string{a, b}
-    shapes := [2][]int{a_shape, b_shape}
+    shapes := [2][]int{a_shape[:], b_shape[:]}
     for labels, k in operands {
         assert(len(labels) == len(shapes[k]), "einsum: an operand needs one label per axis")
         for i in 0 ..< len(labels) {
@@ -66,12 +54,12 @@ einsum_labels :: proc(
         assert(sizes[out[i]] >= 0, "einsum: an output label is missing from the operands")
         assert(strings.index_byte(out[i + 1:], out[i]) < 0, "einsum: an output label repeats")
     }
-    return a, b, out, conj_a, conj_b, sizes
+    return sizes
 }
 
 @(private)
-einsum_output_shape :: proc($M: int, out: string, sizes: EinsumSizes) -> [M]int {
-    assert(len(out) == M, "einsum: the output labels do not match the rank M")
+einsum_shape :: proc(out: string, sizes: [128]int, $M: int) -> [M]int {
+    assert(len(out) == M, "einsum: the output labels do not match the rank")
     shape: [M]int
     for &size, i in shape {
         size = sizes[out[i]]
@@ -79,21 +67,39 @@ einsum_output_shape :: proc($M: int, out: string, sizes: EinsumSizes) -> [M]int 
     return shape
 }
 
+// t seen over the labels of space, of rank R: a repeated label adds its strides (a diagonal), a
+// label t lacks has stride 0 (broadcast), and the axes past len(space) have length 1
 @(private)
-einsum_check_output :: proc(out: string, sizes: EinsumSizes, shape: []int) {
-    assert(len(out) == len(shape), "einsum: C has the wrong rank")
-    for i in 0 ..< len(out) {
-        assert(shape[i] == sizes[out[i]], "einsum: C has the wrong shape")
+einsum_view :: proc(
+    t: Tensor($T, $N),
+    labels, space: string,
+    sizes: [128]int,
+    $R: int,
+) -> Tensor(T, R) {
+    res := Tensor(T, R) {
+        allocator = t.allocator,
+        data      = t.data,
+        borrowed  = true,
     }
+    for d in 0 ..< R {
+        res.shape[d] = 1
+        if d < len(space) {
+            res.shape[d] = sizes[space[d]]
+        }
+    }
+    for stride, i in t.strides {
+        res.strides[strings.index_byte(space, labels[i])] += stride
+    }
+    return res
 }
 
-// C = beta C + alpha sum( A B ) by walking every combination of labels; B = nil for one operand.
+// C = beta C + alpha sum( A B ) in one loop over every label, the output's first
 @(private)
 einsum_loop :: proc(
     a, b, out: string,
-    sizes: EinsumSizes,
-    A, B: []$T,
-    a_strides, b_strides: []int,
+    sizes: [128]int,
+    A: Tensor($T, $NA),
+    B: Tensor(T, $NB),
     C: ^Tensor(T, $NC),
     alpha, beta: T,
     conj_a, conj_b: bool,
@@ -104,69 +110,38 @@ einsum_loop :: proc(
         imultiply(C, beta)
     }
 
-    // every label once, the output's first; strides of repeated labels add up (diagonals)
-    position: [128]int
-    listed: [128]bool
-    size, stride_a, stride_b, stride_c: [64]int
-    n := 0
-    for labels in ([3]string{out, a, b}) {
+    buffer: [NA + NB]u8
+    n := copy(buffer[:], out)
+    for labels in ([2]string{a, b}) {
         for i in 0 ..< len(labels) {
-            l := labels[i]
-            if !listed[l] {
-                listed[l] = true
-                position[l] = n
-                size[n] = sizes[l]
+            if strings.index_byte(string(buffer[:n]), labels[i]) < 0 {
+                buffer[n] = labels[i]
                 n += 1
             }
         }
     }
-    c_strides := C.strides
-    strided_labels := [3]string{a, b, out}
-    operand_strides := [3][]int{a_strides, b_strides, c_strides[:]}
-    strides_of := [3]^[64]int{&stride_a, &stride_b, &stride_c}
-    for labels, k in strided_labels {
-        for i in 0 ..< len(labels) {
-            strides_of[k][position[labels[i]]] += operand_strides[k][i]
-        }
-    }
+    space := string(buffer[:n])
 
-    for i in 0 ..< n {
-        if size[i] == 0 {
-            return
-        }
-    }
-    count: [64]int
-    offset_a, offset_b, offset_c := 0, 0, 0
-    for {
-        x := A[offset_a]
-        if conj_a {
-            x = conjugate(x)
-        }
-        if B != nil {
-            y := B[offset_b]
+    // C has stride 0 along the summed labels, so the loop adds every term into its element
+    va := einsum_view(A, a, space, sizes, NA + NB)
+    vb := einsum_view(B, b, space, sizes, NA + NB)
+    vc := einsum_view(C^, out, space, sizes, NA + NB)
+    l := plan_loop(va.shape, vc.strides, va.strides, vb.strides)
+    sc, sa, sb := loop_step(l, vc.strides), loop_step(l, va.strides), loop_step(l, vb.strides)
+    for r in 0 ..< l.rows {
+        pc, pa, pb :=
+            row_offset(l, r, vc.strides),
+            row_offset(l, r, va.strides),
+            row_offset(l, r, vb.strides)
+        for k in 0 ..< l.n {
+            x, y := va.data[pa + k * sa], vb.data[pb + k * sb]
+            if conj_a {
+                x = conjugate(x)
+            }
             if conj_b {
                 y = conjugate(y)
             }
-            x *= y
-        }
-        C.data[offset_c] += alpha * x
-
-        d := n - 1
-        for ; d >= 0; d -= 1 {
-            count[d] += 1
-            offset_a += stride_a[d]
-            offset_b += stride_b[d]
-            offset_c += stride_c[d]
-            if count[d] < size[d] {
-                break
-            }
-            offset_a -= stride_a[d] * size[d]
-            offset_b -= stride_b[d] * size[d]
-            offset_c -= stride_c[d] * size[d]
-            count[d] = 0
-        }
-        if d < 0 {
-            break
+            vc.data[pc + k * sc] += alpha * x * y
         }
     }
 }
@@ -194,162 +169,149 @@ einsum_uses_gemm :: proc(a, b, out: string) -> bool {
     return true
 }
 
-// The gemm path, for contiguous operands and output. Operands are arranged as
-// A (batch, left, sum), B (batch, sum, right), C (batch, left, right), where batch, left and
-// right follow the output's order and sum A's order; A and B may also come with their last two
-// groups swapped, which gemm reads transposed.
+// The axes of an operand with these labels that put the groups' labels in order
+@(private)
+einsum_axes :: proc(labels: string, groups: [3]string, $N: int) -> [N]int {
+    axes: [N]int
+    n := 0
+    for group in groups {
+        for i in 0 ..< len(group) {
+            axes[n] = strings.index_byte(labels, group[i])
+            n += 1
+        }
+    }
+    return axes
+}
+
+// t with its axes in the order batch, first, second, as a contiguous tensor: t itself when it
+// already is, else a copy; destroy it either way. When only the order batch, second, first is
+// contiguous, that one is returned with swapped = true.
+@(private)
+einsum_gemm_order :: proc(
+    t: Tensor($T, $N),
+    labels, batch, first, second: string,
+) -> (
+    res: Tensor(T, N),
+    swapped: bool,
+) {
+    axes := einsum_axes(labels, {batch, first, second}, N)
+    plain := permute_view(t, axes[:])
+    if is_contiguous(plain) {
+        return plain, false
+    }
+    axes = einsum_axes(labels, {batch, second, first}, N)
+    other := permute_view(t, axes[:])
+    if is_contiguous(other) {
+        return other, true
+    }
+    return contiguous(plain), false
+}
+
+// The gemm path, for non-empty A and B. Labels fall in groups: batch (A, B and C), left (A and
+// C), right (B and C) and sum (A and B). Per batch entry C (left, right) = A (left, sum) B (sum,
+// right), each matrix may also be stored transposed.
 @(private)
 einsum_gemm :: proc(
     a, b, out: string,
-    sizes: EinsumSizes,
+    sizes: [128]int,
     A: Tensor($T, $NA),
     B: Tensor(T, $NB),
     C: ^Tensor(T, $NC),
     alpha, beta: T,
     conj_a, conj_b: bool,
 ) {
-    groups: [4][64]u8
-    batch := strings.builder_from_bytes(groups[0][:])
-    left := strings.builder_from_bytes(groups[1][:])
-    right := strings.builder_from_bytes(groups[2][:])
-    sum := strings.builder_from_bytes(groups[3][:])
+    groups: [4][NA + NB]u8
+    count: [4]int
     for i in 0 ..< len(out) {
         in_a := strings.index_byte(a, out[i]) >= 0
         in_b := strings.index_byte(b, out[i]) >= 0
+        g := 2
         if in_a && in_b {
-            strings.write_byte(&batch, out[i])
+            g = 0
         } else if in_a {
-            strings.write_byte(&left, out[i])
-        } else {
-            strings.write_byte(&right, out[i])
+            g = 1
         }
+        groups[g][count[g]] = out[i]
+        count[g] += 1
     }
     for i in 0 ..< len(a) {
         if strings.index_byte(out, a[i]) < 0 {
-            strings.write_byte(&sum, a[i])
+            groups[3][count[3]] = a[i]
+            count[3] += 1
         }
     }
+    batch, left := string(groups[0][:count[0]]), string(groups[1][:count[1]])
+    right, sum := string(groups[2][:count[2]]), string(groups[3][:count[3]])
 
-    bt, lt := strings.to_string(batch), strings.to_string(left)
-    rt, st := strings.to_string(right), strings.to_string(sum)
-    layouts: [6][64]u8
-    a_plain := fmt.bprint(layouts[0][:], bt, lt, st, sep = "")
-    a_swapped := fmt.bprint(layouts[1][:], bt, st, lt, sep = "")
-    b_plain := fmt.bprint(layouts[2][:], bt, st, rt, sep = "")
-    b_swapped := fmt.bprint(layouts[3][:], bt, rt, st, sep = "")
-    c_plain := fmt.bprint(layouts[4][:], bt, lt, rt, sep = "")
-    c_swapped := fmt.bprint(layouts[5][:], bt, rt, lt, sep = "")
-
-    // C (batch, right, left) is C^T = B^T A^T per batch: swap the operands
-    if out != c_plain && out == c_swapped {
+    c, c_swapped := einsum_gemm_order(C^, out, batch, left, right)
+    defer tensor_destroy(&c)
+    if c_swapped {
+        // C (batch, right, left) is C^T = B^T A^T per batch: swap the operands
         einsum_gemm(b, a, out, sizes, B, A, C, alpha, beta, conj_b, conj_a)
         return
     }
+    A, a_trans := einsum_gemm_order(A, a, batch, left, sum)
+    defer tensor_destroy(&A)
+    B, b_trans := einsum_gemm_order(B, b, batch, sum, right)
+    defer tensor_destroy(&B)
 
-    product :: proc(labels: string, sizes: EinsumSizes) -> int {
+    size :: proc(labels: string, sizes: [128]int) -> int {
         p := 1
         for i in 0 ..< len(labels) {
             p *= sizes[labels[i]]
         }
         return p
     }
-    nb, M, N, K := product(bt, sizes), product(lt, sizes), product(rt, sizes), product(st, sizes)
-    if nb * M * N == 0 {
-        return
-    }
-    if K == 0 {
-        if beta == 0 {
-            fill(C, 0)
-        } else {
-            imultiply(C, beta)
-        }
-        return
-    }
-
-    // bring the operands into a layout gemm reads, copying only when needed
-    a_data, b_data := A.data, B.data
-    a_copy: Tensor(T, NA)
-    b_copy: Tensor(T, NB)
-    defer tensor_destroy(&a_copy)
-    defer tensor_destroy(&b_copy)
-    if a != a_plain && a != a_swapped {
-        axes: [NA]int
-        for i in 0 ..< NA {
-            axes[i] = strings.index_byte(a, a_plain[i])
-        }
-        a_copy = permute_axes(A, axes[:])
-        a_data = a_copy.data
-    }
-    if b != b_plain && b != b_swapped {
-        axes: [NB]int
-        for i in 0 ..< NB {
-            axes[i] = strings.index_byte(b, b_plain[i])
-        }
-        b_copy = permute_axes(B, axes[:])
-        b_data = b_copy.data
-    }
-    a_trans, b_trans := a == a_swapped && a != a_plain, b == b_swapped && b != b_plain
-
-    // gemm writes C (batch, left, right); any other output order goes through a copy
-    c_data := C.data
-    c_beta := beta
-    c_tmp: Tensor(T, NC)
-    defer tensor_destroy(&c_tmp)
-    if out != c_plain {
-        when NC > 0 {
-            tmp_shape: [NC]int
-            for i in 0 ..< NC {
-                tmp_shape[i] = sizes[c_plain[i]]
-            }
-            c_tmp = zeros(T, tmp_shape)
-            c_data = c_tmp.data
-            c_beta = 0
-        }
-    }
-
+    nb, M, N, K := size(batch, sizes), size(left, sizes), size(right, sizes), size(sum, sizes)
+    A3 := ireshape(A, [3]int{nb, K, M} if a_trans else [3]int{nb, M, K})
+    B3 := ireshape(B, [3]int{nb, N, K} if b_trans else [3]int{nb, K, N})
+    C3 := ireshape(c, [3]int{nb, M, N})
     ops := [2][2]ob.Transpose{{.NoTrans, .ConjNoTrans}, {.Trans, .ConjTrans}}
-    complex_type := intrinsics.type_is_complex(T)
-    ta := ops[int(a_trans)][int(conj_a && complex_type)]
-    tb := ops[int(b_trans)][int(conj_b && complex_type)]
-    Mb, Nb, Kb := ob.blasint(M), ob.blasint(N), ob.blasint(K)
-    lda := Mb if a_trans else Kb
-    ldb := Kb if b_trans else Nb
-    ldc := Nb
+    ta := real_op(T, ops[int(a_trans)][int(conj_a)])
+    tb := real_op(T, ops[int(b_trans)][int(conj_b)])
 
-    // TODO: use gemm_batch
-    for i in 0 ..< nb {
-        ob.gemm(
+    when !config.BLAS_HAS_GEMM_BATCH {
+        for i in 0 ..< nb {
+            Ci := view_row(C3, i)
+            bdot_mm(view_row(A3, i), view_row(B3, i), &Ci, alpha, beta, ta, tb)
+        }
+    } else {
+        // one group of nb products of the same sizes
+        pointers := make([][^]T, 3 * nb)
+        defer delete(pointers)
+        for i in 0 ..< nb {
+            pointers[i] = raw_data(view_row(A3, i).data)
+            pointers[nb + i] = raw_data(view_row(B3, i).data)
+            pointers[2 * nb + i] = raw_data(view_row(C3, i).data)
+        }
+        m, n, k, group_size := ob.blasint(M), ob.blasint(N), ob.blasint(K), ob.blasint(nb)
+        lda, ldb, ldc := ob.blasint(A3.shape[2]), ob.blasint(B3.shape[2]), n
+        alpha, beta := alpha, beta
+        ob.gemm_batch(
             .RowMajor,
-            ta,
-            tb,
-            Mb,
-            Nb,
-            Kb,
-            alpha,
-            raw_data(a_data[i * M * K:]),
-            lda,
-            raw_data(b_data[i * K * N:]),
-            ldb,
-            c_beta,
-            raw_data(c_data[i * M * N:]),
-            ldc,
+            &ta,
+            &tb,
+            &m,
+            &n,
+            &k,
+            &alpha,
+            raw_data(pointers),
+            &lda,
+            raw_data(pointers[nb:]),
+            &ldb,
+            &beta,
+            raw_data(pointers[2 * nb:]),
+            &ldc,
+            1,
+            &group_size,
         )
     }
 
-    if out != c_plain {
-        when NC > 0 {
-            axes: [NC]int
-            for i in 0 ..< NC {
-                axes[i] = strings.index_byte(c_plain, out[i])
-            }
-            result := permute_axes(c_tmp, axes[:])
-            defer tensor_destroy(&result)
-            for &x, i in C.data {
-                x = beta * x + result.data[i]
-            }
-        }
+    // c is a copy when C is not in gemm order
+    if !c.borrowed {
+        axes := einsum_axes(out, {batch, left, right}, NC)
+        assign(permute_view(C^, axes[:]), c)
     }
-    return
 }
 
 // C = beta C + alpha einsum(spec, A) with real scale factors; C must have the output's shape
@@ -360,24 +322,22 @@ beinsum_one :: proc(
     alpha := 1.0,
     beta := 0.0,
 ) {
-    a_shape, a_strides := A.shape, A.strides
-    a, b, out, conj_a, conj_b, sizes := einsum_labels(spec, a_shape[:], nil)
-    c_shape := C.shape
-    einsum_check_output(out, sizes, c_shape[:])
+    a, _, out, conj_a, _ := parse_einsum(spec)
+    sizes := einsum_sizes(a, "", out, A.shape, [0]int{})
+    assert(C.shape == einsum_shape(out, sizes, NC), "einsum: C has the wrong shape")
+    one := T(1)
     einsum_loop(
         a,
-        b,
+        "",
         out,
         sizes,
-        A.data,
-        nil,
-        a_strides[:],
-        nil,
+        A,
+        broadcast(&one, [0]int{}),
         C,
         T(alpha),
         T(beta),
         conj_a,
-        conj_b,
+        false,
     )
 }
 
@@ -390,44 +350,15 @@ beinsum_two :: proc(
     alpha := 1.0,
     beta := 0.0,
 ) {
-    a_shape, b_shape := A.shape, B.shape
-    a, b, out, conj_a, conj_b, sizes := einsum_labels(spec, a_shape[:], b_shape[:])
-    c_shape := C.shape
-    einsum_check_output(out, sizes, c_shape[:])
-
-    if einsum_uses_gemm(a, b, out) {
-        // gemm reads contiguous operands and writes a contiguous output
-        A, B := contiguous(A), contiguous(B)
-        defer tensor_destroy(&A)
-        defer tensor_destroy(&B)
-        if is_contiguous(C^) {
-            einsum_gemm(a, b, out, sizes, A, B, C, T(alpha), T(beta), conj_a, conj_b)
-            return
-        }
-        c := tensor_copy(C^)
-        defer tensor_destroy(&c)
-        einsum_gemm(a, b, out, sizes, A, B, &c, T(alpha), T(beta), conj_a, conj_b)
-        assign(C^, c)
+    a, b, out, conj_a, conj_b := parse_einsum(spec)
+    sizes := einsum_sizes(a, b, out, A.shape, B.shape)
+    assert(C.shape == einsum_shape(out, sizes, NC), "einsum: C has the wrong shape")
+    // empty operands go through the loop, which only scales C then
+    if einsum_uses_gemm(a, b, out) && size_of_shape(A.shape) > 0 && size_of_shape(B.shape) > 0 {
+        einsum_gemm(a, b, out, sizes, A, B, C, T(alpha), T(beta), conj_a, conj_b)
         return
     }
-
-    // the loop reads any strides
-    a_strides, b_strides := A.strides, B.strides
-    einsum_loop(
-        a,
-        b,
-        out,
-        sizes,
-        A.data,
-        B.data,
-        a_strides[:],
-        b_strides[:],
-        C,
-        T(alpha),
-        T(beta),
-        conj_a,
-        conj_b,
-    )
+    einsum_loop(a, b, out, sizes, A, B, C, T(alpha), T(beta), conj_a, conj_b)
 }
 
 beinsum :: proc {
@@ -442,9 +373,8 @@ einsum_one :: proc(
     A: Tensor($T, $NA),
     allocator := context.allocator,
 ) -> Tensor(T, M) {
-    a_shape := A.shape
-    _, _, out, _, _, sizes := einsum_labels(spec, a_shape[:], nil)
-    C := zeros(T, einsum_output_shape(M, out, sizes), allocator)
+    a, _, out, _, _ := parse_einsum(spec)
+    C := zeros(T, einsum_shape(out, einsum_sizes(a, "", out, A.shape, [0]int{}), M), allocator)
     beinsum_one(spec, A, &C)
     return C
 }
@@ -457,9 +387,8 @@ einsum_two :: proc(
     B: Tensor(T, $NB),
     allocator := context.allocator,
 ) -> Tensor(T, M) {
-    a_shape, b_shape := A.shape, B.shape
-    _, _, out, _, _, sizes := einsum_labels(spec, a_shape[:], b_shape[:])
-    C := zeros(T, einsum_output_shape(M, out, sizes), allocator)
+    a, b, out, _, _ := parse_einsum(spec)
+    C := zeros(T, einsum_shape(out, einsum_sizes(a, b, out, A.shape, B.shape), M), allocator)
     beinsum_two(spec, A, B, &C)
     return C
 }

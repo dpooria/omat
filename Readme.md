@@ -19,8 +19,8 @@ The default build requires Odin and these system libraries.
   `fftw3_threads` and `fftw3f_threads`.
 
 Use `-define:OMAT_USE_FFTW_THREADS=false` to build with just the base FFTW libraries.
-Use `-define:OMAT_BLAS_ILP64=true` with matching ILP64 BLAS and LAPACKE libraries to use
-64-bit BLAS integers. The [configuration examples](examples/config.sh) cover these options
+Use `-define:OMAT_BLAS_ILP64=true` with matching ILP64 BLAS and LAPACKE libraries to use 64-bit BLAS integers.
+The [configuration examples](examples/config.sh) cover these options
 and alternative libraries, including Netlib, AMD AOCL, and Intel oneMKL.
 
 ## Conventions
@@ -104,4 +104,4 @@ Run `odin test test/` from the repository root.
 - FFT plans run on contiguous tensors (the one-shot `fft` accepts views). Planning is
   serialized by a lock, so plans may be made from any thread; executing plans is thread-safe.
 - `set_num_threads(n)` sets OpenBLAS threads and the threads of FFTW plans made afterwards.
--  Batched einsum loops over `gemm`.
+- Batched einsum loops over `gemm` unless built with `OMAT_BLAS_HAS_GEMM_BATCH`.

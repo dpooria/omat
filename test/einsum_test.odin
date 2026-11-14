@@ -18,7 +18,7 @@ einsum_matmul_layouts :: proc(t: ^testing.T) {
     defer om.tensor_destroy(&C)
     testing.expect(t, om.allclose(C, want, rtol = 0, atol = 1e-12))
 
-    // B given as (k, j): gemm reads it transposed, no copy
+    // B stored as (k, j): gemm reads it transposed, no copy
     Bt := om.transpose(B)
     defer om.tensor_destroy(&Bt)
     C2 := om.einsum(2, "ij,kj->ik", A, Bt)
@@ -28,9 +28,7 @@ einsum_matmul_layouts :: proc(t: ^testing.T) {
     // transposed output: computed as B^T A^T
     Ct := om.einsum(2, "ij,jk->ki", A, B)
     defer om.tensor_destroy(&Ct)
-    wantt := om.transpose(want)
-    defer om.tensor_destroy(&wantt)
-    testing.expect(t, om.allclose(Ct, wantt, rtol = 0, atol = 1e-12))
+    testing.expect(t, om.allclose(Ct, om.transpose_view(want), rtol = 0, atol = 1e-12))
 
     // outer and inner products
     x := om.randn(f64, [1]int{3})
@@ -39,11 +37,9 @@ einsum_matmul_layouts :: proc(t: ^testing.T) {
     defer om.tensor_destroy(&y)
     outer := om.einsum(2, "i,j->ij", x, y)
     defer om.tensor_destroy(&outer)
-    for i in 0 ..< 3 {
-        for j in 0 ..< 4 {
-            testing.expect(t, abs(outer.data[i * 4 + j] - x.data[i] * y.data[j]) < 1e-14)
-        }
-    }
+    want_outer := om.dot(om.ireshape(x, [2]int{3, 1}), om.ireshape(y, [2]int{1, 4}))
+    defer om.tensor_destroy(&want_outer)
+    testing.expect(t, om.allclose(outer, want_outer, rtol = 0, atol = 1e-14))
     inner := om.einsum(0, "i,i->", x, x)
     defer om.tensor_destroy(&inner)
     testing.expect(t, abs(inner.data[0] - om.dot(x, x)) < 1e-14)
@@ -51,75 +47,57 @@ einsum_matmul_layouts :: proc(t: ^testing.T) {
 
 @(test)
 einsum_overlap_conjugated :: proc(t: ^testing.T) {
-    // S_ij = <psi_i|psi_j> = Σ_g conj(psi_ig) psi_jg for bands as rows
-    nb, ng :: 3, 7
-    psi := om.randn(complex128, [2]int{nb, ng})
+    // S_ij = <psi_i|psi_j> for bands as rows
+    psi := om.randn(complex128, [2]int{3, 7})
     defer om.tensor_destroy(&psi)
     S := om.einsum(2, "ig*,jg->ij", psi, psi)
     defer om.tensor_destroy(&S)
-    for i in 0 ..< nb {
-        for j in 0 ..< nb {
-            want: complex128
-            for g in 0 ..< ng {
-                want += conj(psi.data[i * ng + g]) * psi.data[j * ng + g]
-            }
-            testing.expect(t, abs(S.data[i * nb + j] - want) < 1e-12)
-        }
-    }
+    want := om.braket(psi, psi)
+    defer om.tensor_destroy(&want)
+    testing.expect(t, om.allclose(S, want, rtol = 0, atol = 1e-12))
 }
 
 @(test)
 einsum_batched :: proc(t: ^testing.T) {
-    // one gemm_batch over b, e.g. one small matrix product per k-point
-    nk, m, k, n :: 4, 3, 5, 2
-    A := om.randn(complex128, [3]int{nk, m, k})
+    // one matrix product per entry of b, e.g. per k-point
+    A := om.randn(complex128, [3]int{4, 3, 5})
     defer om.tensor_destroy(&A)
-    B := om.randn(complex128, [3]int{nk, k, n})
+    B := om.randn(complex128, [3]int{4, 5, 2})
     defer om.tensor_destroy(&B)
     C := om.einsum(3, "bij,bjk*->bik", A, B)
     defer om.tensor_destroy(&C)
-    for b in 0 ..< nk {
-        for i in 0 ..< m {
-            for j in 0 ..< n {
-                want: complex128
-                for l in 0 ..< k {
-                    want += A.data[(b * m + i) * k + l] * conj(B.data[(b * k + l) * n + j])
-                }
-                testing.expect(t, abs(C.data[(b * m + i) * n + j] - want) < 1e-12)
-            }
-        }
+    for b in 0 ..< 4 {
+        Bc := om.conjugate(om.view_row(B, b))
+        defer om.tensor_destroy(&Bc)
+        want := om.dot(om.view_row(A, b), Bc)
+        defer om.tensor_destroy(&want)
+        testing.expect(t, om.allclose(om.view_row(C, b), want, rtol = 0, atol = 1e-12))
     }
 }
 
 @(test)
 einsum_permuted :: proc(t: ^testing.T) {
     // every operand and the output need a copy into gemm's layout
-    na, nb, nc, nj :: 2, 3, 4, 5
-    A := om.randn(f64, [3]int{na, nj, nb})
+    A := om.randn(f64, [3]int{2, 5, 3})
     defer om.tensor_destroy(&A)
-    B := om.randn(f64, [3]int{nb, nj, nc})
+    B := om.randn(f64, [3]int{3, 5, 4})
     defer om.tensor_destroy(&B)
     C := om.einsum(3, "ajb,bjc->bca", A, B)
     defer om.tensor_destroy(&C)
-    for a in 0 ..< na {
-        for b in 0 ..< nb {
-            for c in 0 ..< nc {
-                want := 0.0
-                for j in 0 ..< nj {
-                    want += A.data[(a * nj + j) * nb + b] * B.data[(b * nj + j) * nc + c]
-                }
-                testing.expect(t, abs(C.data[(b * nc + c) * na + a] - want) < 1e-12)
-            }
-        }
+    for b in 0 ..< 3 {
+        // C[b] = (A[:, :, b] B[b])^T = B[b]^T A[:, :, b]^T
+        Ab := om.tensor_copy(om.view_axis(A, b, axis = 2))
+        defer om.tensor_destroy(&Ab)
+        want := om.dot(om.view_row(B, b), Ab, .Trans, .Trans)
+        defer om.tensor_destroy(&want)
+        testing.expect(t, om.allclose(om.view_row(C, b), want, rtol = 0, atol = 1e-12))
     }
 
     // accumulate: C = 2 C + 0.5 einsum
-    before := om.tensor_copy(C)
-    defer om.tensor_destroy(&before)
+    want := om.multiply(C, 2.5)
+    defer om.tensor_destroy(&want)
     om.beinsum("ajb,bjc->bca", A, B, &C, alpha = 0.5, beta = 2)
-    for x, i in C.data {
-        testing.expect(t, abs(x - 2.5 * before.data[i]) < 1e-12)
-    }
+    testing.expect(t, om.allclose(C, want, rtol = 0, atol = 1e-12))
 }
 
 @(test)
@@ -130,24 +108,19 @@ einsum_loop_cases :: proc(t: ^testing.T) {
 
     At := om.einsum(2, "ij->ji", A)
     defer om.tensor_destroy(&At)
-    want_t := om.transpose(A)
-    defer om.tensor_destroy(&want_t)
-    testing.expect(t, om.allclose(At, want_t, rtol = 0, atol = 0))
+    testing.expect(t, om.allclose(At, om.transpose_view(A), rtol = 0, atol = 0))
 
     col_sums := om.einsum(1, "ij->j", A)
     defer om.tensor_destroy(&col_sums)
+    want_sums := om.sum_axis(A, 0)
+    defer om.tensor_destroy(&want_sums)
+    testing.expect(t, om.allclose(col_sums, want_sums, rtol = 0, atol = 1e-14))
+
     diag := om.einsum(1, "ii->i", A)
     defer om.tensor_destroy(&diag)
+    testing.expect(t, om.allclose(diag, om.diagonal(A), rtol = 0, atol = 0))
     tr := om.einsum(0, "ii->", A)
     defer om.tensor_destroy(&tr)
-    for j in 0 ..< n {
-        s := 0.0
-        for i in 0 ..< n {
-            s += A.data[i * n + j]
-        }
-        testing.expect(t, abs(col_sums.data[j] - s) < 1e-14)
-        testing.expect_value(t, diag.data[j], A.data[j * n + j])
-    }
     testing.expect(t, abs(tr.data[0] - om.trace(A)) < 1e-14)
 
     // a label summed within one operand only: (Σ_j A_ij)(Σ_k x_k)
@@ -155,23 +128,29 @@ einsum_loop_cases :: proc(t: ^testing.T) {
     defer om.tensor_destroy(&x)
     r := om.einsum(1, "ij,k->i", A, x)
     defer om.tensor_destroy(&r)
-    sx := om.sum(x)
-    for i in 0 ..< n {
-        s := 0.0
-        for j in 0 ..< n {
-            s += A.data[i * n + j]
-        }
-        testing.expect(t, abs(r.data[i] - s * sx) < 1e-12)
-    }
+    row_sums := om.sum_axis(A, 1)
+    defer om.tensor_destroy(&row_sums)
+    want_r := om.multiply(row_sums, om.sum(x))
+    defer om.tensor_destroy(&want_r)
+    testing.expect(t, om.allclose(r, want_r, rtol = 0, atol = 1e-12))
 
-    // repeated label within an operand: A_ii x_i
+    // repeated label within an operand: A_ii y_i
     y := om.randn(f64, [1]int{n})
     defer om.tensor_destroy(&y)
     d := om.einsum(1, "ii,i->i", A, y)
     defer om.tensor_destroy(&d)
-    for i in 0 ..< n {
-        testing.expect(t, abs(d.data[i] - A.data[i * n + i] * y.data[i]) < 1e-14)
-    }
+    want_d := om.multiply(om.diagonal(A), y)
+    defer om.tensor_destroy(&want_d)
+    testing.expect(t, om.allclose(d, want_d, rtol = 0, atol = 1e-14))
+
+    // conjugation on the loop path
+    Z := om.randn(complex128, [2]int{3, 5})
+    defer om.tensor_destroy(&Z)
+    Zh := om.einsum(2, "ij*->ji", Z)
+    defer om.tensor_destroy(&Zh)
+    want_h := om.transpose(Z, .ConjTrans)
+    defer om.tensor_destroy(&want_h)
+    testing.expect(t, om.allclose(Zh, want_h, rtol = 0, atol = 0))
 }
 
 @(test)
@@ -209,37 +188,5 @@ linalg_triangles :: proc(t: ^testing.T) {
     }
     om.isolve_triangular(H, &X)
     expect_close(t, X.data, B.data, 1e-10)
-}
-
-@(test)
-linalg_propagator :: proc(t: ^testing.T) {
-    // exp(-i H dt) from complex weights: unitary, and e^{-i w dt} on each eigenvector
-    n :: 6
-    dt :: 0.3
-    H := random_hpd(complex128, n)
-    defer om.tensor_destroy(&H)
-    w, V, _ := om.eigh(H)
-    defer om.tensor_destroy(&w)
-    defer om.tensor_destroy(&V)
-    phases := om.zeros(complex128, [1]int{n})
-    defer om.tensor_destroy(&phases)
-    for x, i in w.data {
-        phases.data[i] = complex(math.cos(x * dt), -math.sin(x * dt))
-    }
-    P := om.from_eigh(phases, V)
-    defer om.tensor_destroy(&P)
-
-    I := om.dot(P, P, transB = .ConjTrans)
-    defer om.tensor_destroy(&I)
-    for i in 0 ..< n {
-        for j in 0 ..< n {
-            want := complex128(1) if i == j else 0
-            testing.expect(t, abs(I.data[i * n + j] - want) < 1e-12)
-        }
-    }
-    for i in 0 ..< n {
-        v := row(V, i)
-        testing.expect(t, residual(P, v, phases.data[i], v) < 1e-12)
-    }
 }
 

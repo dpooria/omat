@@ -23,14 +23,14 @@ odin test test/ -define:OMAT_USE_FFTW_THREADS=false
 # FFTW with OpenMP libraries.
 odin test test/ -define:OMAT_FFTW3_THREADS=system:fftw3_omp -define:OMAT_FFTW3F_THREADS=system:fftw3f_omp
 
-# AMD AOCL BLIS and libFLAME (LP64).
+# AMD AOCL BLIS and libFLAME (LP64). AOCL-BLAS has cblas_?gemm_batch, used by batched einsum.
 blis=/path/to/blis/lib
 flame=/path/to/libflame/lib
 utils=/path/to/aocl-utils/lib
 
 LD_LIBRARY_PATH=$blis:$flame:$utils BLIS_NUM_THREADS=1 odin test test/ \
     -define:OMAT_DISABLE_OPENBLAS=true -define:OMAT_BLAS=system:blis-mt -define:OMAT_LAPACKE=system:flame \
-    "-extra-linker-flags:-L$blis -L$flame -L$utils"
+    -define:OMAT_BLAS_HAS_GEMM_BATCH=true "-extra-linker-flags:-L$blis -L$flame -L$utils"
 
 # AMD AOCL-FFTZ via its FFTW wrapper. Some releases call the wrapper libfftw3.so.
 fftz=/path/to/aocl-fftz/lib
