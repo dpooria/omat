@@ -2,6 +2,7 @@ package omat
 
 import "base:intrinsics"
 import "core:math"
+import "core:math/rand"
 
 round_f64 :: proc(val: f64, decimals: int = 0) -> f64 {
     if decimals == 0 {
@@ -35,5 +36,25 @@ size_of_shape :: proc(shape: [$N]int) -> int {
         size *= s
     }
     return size
+}
+
+// random numbers according to the type (including the imag part)
+random_value :: proc($T: typeid, normal: bool, generator: rand.Generator) -> T {
+    when intrinsics.type_is_complex(T) {
+        R :: intrinsics.type_elem_type(T)
+        return complex(random_value(R, normal, generator), random_value(R, normal, generator))
+    } else when intrinsics.type_is_float(T) {
+        if normal {
+            return T(rand.float64_normal(0, 1, generator))
+        }
+        return T(rand.float64_range(0, 1, generator))
+    } else {
+        #assert(intrinsics.type_is_integer(T), "random_value: numeric types only")
+        // integers: 0 or 1 uniformly; normal draws are rounded
+        if normal {
+            return T(math.round(rand.float64_normal(0, 1, generator)))
+        }
+        return T(rand.int63_max(2, generator))
+    }
 }
 

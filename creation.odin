@@ -130,6 +130,19 @@ fill_randu :: proc(t: ^Tensor($T, $N), generator := context.random_generator) {
     }
 }
 
+// create a uniform distributed random Tensor
+@(require_results)
+randu :: proc(
+    $T: typeid,
+    shape: [$N]int,
+    generator := context.random_generator,
+    allocator := context.allocator,
+) -> Tensor(T, N) {
+    t := zeros(T, shape, allocator)
+    fill_randu(&t, generator)
+    return t
+}
+
 // standard normal for real types and for both parts of complex ones
 fill_randn :: proc(t: ^Tensor($T, $N), generator := context.random_generator) {
     l := plan_loop(t.shape, t.strides)
@@ -142,22 +155,34 @@ fill_randn :: proc(t: ^Tensor($T, $N), generator := context.random_generator) {
     }
 }
 
-random_value :: proc($T: typeid, normal: bool, generator: rand.Generator) -> T {
-    when intrinsics.type_is_complex(T) {
-        R :: intrinsics.type_elem_type(T)
-        return complex(random_value(R, normal, generator), random_value(R, normal, generator))
-    } else when intrinsics.type_is_float(T) {
-        if normal {
-            return T(rand.float64_normal(0, 1, generator))
+// create a standard normal distributed random Tensor
+@(require_results)
+randn :: proc(
+    $T: typeid,
+    shape: [$N]int,
+    generator := context.random_generator,
+    allocator := context.allocator,
+) -> Tensor(T, N) {
+    t := zeros(T, shape, allocator)
+    fill_randn(&t, generator)
+    return t
+}
+
+// create a complex valued random tensor with the given shape
+random_complex :: proc(
+    $C: typeid,
+    shape: [$N]int,
+    genarator := context.random_generator,
+    allocator := context.allocator,
+) -> Tensor(C, N) {
+    t := zeros(C, shape, allocator)
+    for &x in t.data {
+        when C == complex128 {
+            x = complex(rand.float64(genarator), rand.float64(genarator))
+        } else {
+            x = complex(rand.float32(genarator), rand.float32(genarator))
         }
-        return T(rand.float64_range(0, 1, generator))
-    } else {
-        #assert(intrinsics.type_is_integer(T), "random_value: numeric types only")
-        // integers: 0 or 1 uniformly; normal draws are rounded
-        if normal {
-            return T(math.round(rand.float64_normal(0, 1, generator)))
-        }
-        return T(rand.int63_max(2, generator))
     }
+    return t
 }
 
