@@ -239,7 +239,7 @@ allclose_tt :: proc(a, b: Tensor($T, $N), rtol := 1e-5, atol := 1e-8) -> bool {
 // |a - b| <= atol + rtol |b| for every element, as numpy's allclose (tensor-slice)
 allclose_ts :: proc(a: Tensor($T, $N), b: []T, rtol := 1e-5, atol := 1e-8) -> bool {
     assert(size_of_shape(a.shape) == len(b), "allclose: size mismatch")
-    return allclose_tt(a, tensor_from_data(a.shape, b))
+    return allclose_tt(a, tensor_from_data(a.shape, b), rtol, atol)
 }
 
 // |a - b| <= atol + rtol |b| for every element, as numpy's allclose
