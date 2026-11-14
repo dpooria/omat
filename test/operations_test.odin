@@ -44,43 +44,6 @@ asinh_f32 :: proc "contextless" (x: f32) -> f32 {
     return math.asinh(x)
 }
 
-// The same values laid out three ways: contiguous, as a box of a larger tensor (gaps between
-// rows), and as the transposed view of a transposed copy (column-major).
-Layouts :: struct($T: typeid) {
-    plain, parent, column_major: om.Tensor(T, 2),
-    boxed, transposed:           om.Tensor(T, 2),
-}
-
-make_layouts :: proc(A: om.Tensor($T, 2)) -> Layouts(T) {
-    m, n := A.shape[0], A.shape[1]
-    l: Layouts(T)
-    l.plain = om.tensor_copy(A)
-    l.parent = om.zeros(T, [2]int{m + 2, n + 3})
-    l.boxed = om.view(l.parent, {1, 2}, {m + 1, n + 2})
-    om.assign(l.boxed, A)
-    l.column_major = om.transpose(A)
-    l.transposed = om.transpose_view(l.column_major)
-    return l
-}
-
-destroy_layouts :: proc(l: ^Layouts($T)) {
-    om.tensor_destroy(&l.plain)
-    om.tensor_destroy(&l.parent)
-    om.tensor_destroy(&l.column_major)
-}
-
-// max |got[i, j] - want[i, j]| read through the strides of both
-max_diff :: proc(got, want: om.Tensor($T, 2)) -> f64 {
-    assert(got.shape == want.shape)
-    d := 0.0
-    for i in 0 ..< got.shape[0] {
-        for j in 0 ..< got.shape[1] {
-            d = max(d, f64(abs(om.atv(got, i, j) - om.atv(want, i, j))))
-        }
-    }
-    return d
-}
-
 positive_matrix :: proc($T: typeid, m, n: int) -> om.Tensor(T, 2) {
     A := om.zeros(T, [2]int{m, n})
     om.fill_randu(&A)
@@ -260,7 +223,7 @@ ops_unary_in_place_on_views :: proc(t: ^testing.T) {
 
 @(test)
 ops_complex_parts :: proc(t: ^testing.T) {
-    Z := random_matrix(complex128, [2]int{3, 4})
+    Z := om.randn(complex128, [2]int{3, 4})
     defer om.tensor_destroy(&Z)
     L := make_layouts(Z)
     defer destroy_layouts(&L)
@@ -502,7 +465,7 @@ ops_integer_and_complex_types :: proc(t: ^testing.T) {
     defer om.tensor_destroy(&M)
     testing.expect_value(t, M.data[2], 3)
 
-    Z := random_matrix(complex64, [1]int{5})
+    Z := om.randn(complex64, [1]int{5})
     defer om.tensor_destroy(&Z)
     W := om.multiply(Z, Z)
     defer om.tensor_destroy(&W)
@@ -516,7 +479,7 @@ ops_integer_and_complex_types :: proc(t: ^testing.T) {
 
 @(test)
 ops_transpose_forms :: proc(t: ^testing.T) {
-    Z := random_matrix(complex128, [2]int{3, 5})
+    Z := om.randn(complex128, [2]int{3, 5})
     defer om.tensor_destroy(&Z)
     L := make_layouts(Z)
     defer destroy_layouts(&L)
@@ -543,7 +506,7 @@ ops_transpose_forms :: proc(t: ^testing.T) {
     }
 
     // in place, for BLAS and other element types
-    F := random_matrix(f64, [2]int{2, 3})
+    F := om.randn(f64, [2]int{2, 3})
     defer om.tensor_destroy(&F)
     G := om.tensor_copy(F)
     defer om.tensor_destroy(&G)

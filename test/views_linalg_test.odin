@@ -18,9 +18,9 @@ embedded :: proc(A: om.Tensor($T, 2)) -> (parent, block: om.Tensor(T, 2)) {
 @(test)
 views_in_place_lapack :: proc(t: ^testing.T) {
     n :: 5
-    A := random_matrix(complex128, [2]int{n, n})
+    A := om.randn(complex128, [2]int{n, n})
     defer om.tensor_destroy(&A)
-    B := random_matrix(complex128, [2]int{3, n})
+    B := om.randn(complex128, [2]int{3, n})
     defer om.tensor_destroy(&B)
 
     // solve on blocks of larger matrices: LAPACK reads their leading dimensions, no copies
@@ -129,7 +129,7 @@ views_eigen_and_svd_outputs :: proc(t: ^testing.T) {
     expect_close(t, wg.data, wgall.data, 1e-10)
 
     // eig of a block, vectors into a view
-    G := random_matrix(f64, [2]int{4, 4})
+    G := om.randn(f64, [2]int{4, 4})
     defer om.tensor_destroy(&G)
     pe, Ge := embedded(G)
     defer om.tensor_destroy(&pe)
@@ -146,7 +146,7 @@ views_eigen_and_svd_outputs :: proc(t: ^testing.T) {
     }
 
     // svd of a block into U and Vh views
-    M := random_matrix(f64, [2]int{5, 3})
+    M := om.randn(f64, [2]int{5, 3})
     defer om.tensor_destroy(&M)
     pm, Mv := embedded(M)
     defer om.tensor_destroy(&pm)
@@ -171,7 +171,7 @@ views_eigen_and_svd_outputs :: proc(t: ^testing.T) {
     testing.expect(t, max_diff(R, M) < 1e-12)
 
     // orthonormalizing a block of rows in place
-    psi := random_matrix(complex128, [2]int{3, 8})
+    psi := om.randn(complex128, [2]int{3, 8})
     defer om.tensor_destroy(&psi)
     pp, Pv := embedded(psi)
     defer om.tensor_destroy(&pp)
@@ -184,9 +184,9 @@ views_eigen_and_svd_outputs :: proc(t: ^testing.T) {
 
 @(test)
 views_read_only_linalg :: proc(t: ^testing.T) {
-    A := random_matrix(f64, [2]int{6, 4})
+    A := om.randn(f64, [2]int{6, 4})
     defer om.tensor_destroy(&A)
-    b := random_matrix(f64, [1]int{6})
+    b := om.randn(f64, [1]int{6})
     defer om.tensor_destroy(&b)
 
     // least squares from a transposed view and a strided right-hand side
@@ -239,9 +239,9 @@ views_read_only_linalg :: proc(t: ^testing.T) {
 
 @(test)
 views_blas_and_einsum :: proc(t: ^testing.T) {
-    A := random_matrix(complex128, [2]int{4, 5})
+    A := om.randn(complex128, [2]int{4, 5})
     defer om.tensor_destroy(&A)
-    x := random_matrix(complex128, [1]int{4})
+    x := om.randn(complex128, [1]int{4})
     defer om.tensor_destroy(&x)
 
     // gemv on a transposed view: BLAS reads the original with the op flipped
@@ -269,7 +269,7 @@ views_blas_and_einsum :: proc(t: ^testing.T) {
     )
 
     // gemm accumulating into a block: C = 2 A^T B + 0.5 C, A^T a transposed view
-    B := random_matrix(complex128, [2]int{4, 3})
+    B := om.randn(complex128, [2]int{4, 3})
     defer om.tensor_destroy(&B)
     pc := om.ones(complex128, [2]int{7, 6})
     defer om.tensor_destroy(&pc)
@@ -308,7 +308,7 @@ views_blas_and_einsum :: proc(t: ^testing.T) {
 
 @(test)
 views_fft_one_shot :: proc(t: ^testing.T) {
-    X := random_matrix(complex128, [2]int{6, 8})
+    X := om.randn(complex128, [2]int{6, 8})
     defer om.tensor_destroy(&X)
     column := om.view_row(om.transpose_view(X), 3) // stride 8
     f1 := om.fft(column)

@@ -5,48 +5,12 @@ import "core:testing"
 
 import om ".."
 
-random_matrix :: proc($T: typeid, shape: [$N]int) -> om.Tensor(T, N) {
-    t := om.zeros(T, shape)
-    om.fill_randn(&t)
-    return t
-}
-
-// R R^H + n I: Hermitian positive definite
-random_hpd :: proc($T: typeid, n: int) -> om.Tensor(T, 2) {
-    r := random_matrix(T, [2]int{n, n})
-    defer om.tensor_destroy(&r)
-    a := om.dot(r, r, transB = .ConjTrans)
-    for i in 0 ..< n {
-        a.data[i * n + i] += T(f64(n))
-    }
-    return a
-}
-
-// max_i |(A x)_i - scale * y_i|, with x, y rows and A promoted to their type
-residual :: proc(A: om.Tensor($T, 2), x: []$C, scale: C, y: []C) -> f64 {
-    n := A.shape[1]
-    r := 0.0
-    for i in 0 ..< A.shape[0] {
-        s: C
-        for j in 0 ..< n {
-            s += C(A.data[i * n + j]) * x[j]
-        }
-        r = max(r, f64(abs(s - scale * y[i])))
-    }
-    return r
-}
-
-row :: proc(t: om.Tensor($T, 2), i: int) -> []T {
-    n := t.shape[1]
-    return t.data[i * n:][:n]
-}
-
 @(test)
 linalg_solve :: proc(t: ^testing.T) {
     n :: 7
-    A := random_matrix(f64, [2]int{n, n})
+    A := om.randn(f64, [2]int{n, n})
     defer om.tensor_destroy(&A)
-    b := random_matrix(f64, [1]int{n})
+    b := om.randn(f64, [1]int{n})
     defer om.tensor_destroy(&b)
     x, err := om.solve(A, b)
     defer om.tensor_destroy(&x)
@@ -54,9 +18,9 @@ linalg_solve :: proc(t: ^testing.T) {
     testing.expect(t, residual(A, x.data, 1, b.data) < 1e-12)
 
     // every row of B is a right-hand side
-    Ac := random_matrix(complex64, [2]int{n, n})
+    Ac := om.randn(complex64, [2]int{n, n})
     defer om.tensor_destroy(&Ac)
-    B := random_matrix(complex64, [2]int{3, n})
+    B := om.randn(complex64, [2]int{3, n})
     defer om.tensor_destroy(&B)
     X, errc := om.solve(Ac, B)
     defer om.tensor_destroy(&X)
@@ -79,7 +43,7 @@ linalg_solve_kinds :: proc(t: ^testing.T) {
     n :: 6
     A := random_hpd(complex128, n)
     defer om.tensor_destroy(&A)
-    b := random_matrix(complex128, [1]int{n})
+    b := om.randn(complex128, [1]int{n})
     defer om.tensor_destroy(&b)
     testing.expect(t, om.is_hermitian(A))
 
@@ -124,7 +88,7 @@ linalg_solve_kinds :: proc(t: ^testing.T) {
 @(test)
 linalg_inv :: proc(t: ^testing.T) {
     n :: 6
-    A := random_matrix(complex128, [2]int{n, n})
+    A := om.randn(complex128, [2]int{n, n})
     defer om.tensor_destroy(&A)
     Ai, err := om.inv(A)
     defer om.tensor_destroy(&Ai)
@@ -311,7 +275,7 @@ linalg_matrix_functions :: proc(t: ^testing.T) {
 linalg_eig :: proc(t: ^testing.T) {
     n :: 9
     // random real matrices have complex conjugate pairs
-    A := random_matrix(f64, [2]int{n, n})
+    A := om.randn(f64, [2]int{n, n})
     defer om.tensor_destroy(&A)
     w, V, err := om.eig(A)
     defer om.tensor_destroy(&w)
@@ -327,7 +291,7 @@ linalg_eig :: proc(t: ^testing.T) {
     }
     testing.expect(t, pairs > 0)
 
-    Ac := random_matrix(complex64, [2]int{n, n})
+    Ac := om.randn(complex64, [2]int{n, n})
     defer om.tensor_destroy(&Ac)
     wc, Vc, errc := om.eig(Ac)
     defer om.tensor_destroy(&wc)
@@ -378,9 +342,9 @@ check_svd :: proc(t: ^testing.T, A: om.Tensor($T, 2), full: bool) {
 
 @(test)
 linalg_svd :: proc(t: ^testing.T) {
-    tall := random_matrix(f64, [2]int{7, 4})
+    tall := om.randn(f64, [2]int{7, 4})
     defer om.tensor_destroy(&tall)
-    wide := random_matrix(complex128, [2]int{3, 5})
+    wide := om.randn(complex128, [2]int{3, 5})
     defer om.tensor_destroy(&wide)
     for full in ([]bool{false, true}) {
         check_svd(t, tall, full)
@@ -396,7 +360,7 @@ linalg_factor_solves :: proc(t: ^testing.T) {
     L, _ := om.cholesky(A)
     defer om.tensor_destroy(&L)
 
-    B := random_matrix(complex128, [2]int{3, n})
+    B := om.randn(complex128, [2]int{3, n})
     defer om.tensor_destroy(&B)
     X := om.cho_solve(L, B)
     defer om.tensor_destroy(&X)
@@ -404,7 +368,7 @@ linalg_factor_solves :: proc(t: ^testing.T) {
         testing.expect(t, residual(A, row(X, i), 1, row(B, i)) < 1e-10)
     }
 
-    b := random_matrix(complex128, [1]int{n})
+    b := om.randn(complex128, [1]int{n})
     defer om.tensor_destroy(&b)
     y := om.solve_triangular(L, b)
     defer om.tensor_destroy(&y)
@@ -420,7 +384,7 @@ linalg_factor_solves :: proc(t: ^testing.T) {
 @(test)
 linalg_orthonormalize :: proc(t: ^testing.T) {
     k, n :: 4, 20
-    psi := random_matrix(complex128, [2]int{k, n})
+    psi := om.randn(complex128, [2]int{k, n})
     defer om.tensor_destroy(&psi)
     Q := om.orthonormalize(psi)
     defer om.tensor_destroy(&Q)
@@ -444,9 +408,9 @@ linalg_orthonormalize :: proc(t: ^testing.T) {
 linalg_lstsq_pinv :: proc(t: ^testing.T) {
     // overdetermined: the residual is orthogonal to the columns of A
     m, n :: 9, 4
-    A := random_matrix(f64, [2]int{m, n})
+    A := om.randn(f64, [2]int{m, n})
     defer om.tensor_destroy(&A)
-    b := random_matrix(f64, [1]int{m})
+    b := om.randn(f64, [1]int{m})
     defer om.tensor_destroy(&b)
     x, rank, err := om.lstsq(A, b)
     defer om.tensor_destroy(&x)
@@ -473,12 +437,12 @@ linalg_lstsq_pinv :: proc(t: ^testing.T) {
     }
 
     // rank deficient and wide, several right-hand sides as rows
-    W := random_matrix(complex128, [2]int{3, 6})
+    W := om.randn(complex128, [2]int{3, 6})
     defer om.tensor_destroy(&W)
     for j in 0 ..< 6 {
         W.data[2 * 6 + j] = W.data[j] + W.data[6 + j]
     }
-    Bw := random_matrix(complex128, [2]int{2, 3})
+    Bw := om.randn(complex128, [2]int{2, 3})
     defer om.tensor_destroy(&Bw)
     Xw, rankw, errw := om.lstsq(W, Bw)
     defer om.tensor_destroy(&Xw)
@@ -507,7 +471,7 @@ linalg_det_norm_trace :: proc(t: ^testing.T) {
     testing.expect(t, abs(om.norm(A) - math.sqrt_f64(18)) < 1e-12)
 
     // complex: det is the product of the eigenvalues
-    C := random_matrix(complex128, [2]int{5, 5})
+    C := om.randn(complex128, [2]int{5, 5})
     defer om.tensor_destroy(&C)
     w, _ := om.eigvals(C)
     defer om.tensor_destroy(&w)

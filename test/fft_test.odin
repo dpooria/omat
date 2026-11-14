@@ -7,34 +7,10 @@ import "core:thread"
 
 import om ".."
 
-random_complex :: proc($C: typeid, shape: [$N]int) -> om.Tensor(C, N) {
-    t := om.zeros(C, shape)
-    for &x in t.data {
-        when C == complex128 {
-            x = complex(rand.float64(), rand.float64())
-        } else {
-            x = complex(rand.float32(), rand.float32())
-        }
-    }
-    return t
-}
-
-close :: proc(a, b: []$E, tol: f64) -> bool {
-    if len(a) != len(b) {
-        return false
-    }
-    for x, i in a {
-        if f64(abs(x - b[i])) > tol {
-            return false
-        }
-    }
-    return true
-}
-
 @(test)
 fft_matches_naive_dft :: proc(t: ^testing.T) {
     n :: 16
-    x := random_complex(complex128, [1]int{n})
+    x := om.random_complex(complex128, [1]int{n})
     defer om.tensor_destroy(&x)
     y := om.fft(x)
     defer om.tensor_destroy(&y)
@@ -58,13 +34,13 @@ fft_matches_naive_dft :: proc(t: ^testing.T) {
 
 @(test)
 fft_roundtrip_3d_f32 :: proc(t: ^testing.T) {
-    x := random_complex(complex64, [3]int{8, 6, 10})
+    x := om.random_complex(complex64, [3]int{8, 6, 10})
     defer om.tensor_destroy(&x)
     y := om.fft(x)
     defer om.tensor_destroy(&y)
     z := om.invfft(y)
     defer om.tensor_destroy(&z)
-    testing.expect(t, close(z.data, x.data, 1e-5))
+    testing.expect(t, om.allclose(z, x, rtol = 0, atol = 1e-5))
 
     // Ortho keeps the norm (Parseval)
     o := om.fft(x, norm = .Ortho)
@@ -82,7 +58,7 @@ fft_roundtrip_3d_f32 :: proc(t: ^testing.T) {
 @(test)
 fft_batched :: proc(t: ^testing.T) {
     // 3 independent 1D transforms along the rows
-    x := random_complex(complex128, [2]int{3, 8})
+    x := om.random_complex(complex128, [2]int{3, 8})
     defer om.tensor_destroy(&x)
     y := om.fft(x, {.Batched})
     defer om.tensor_destroy(&y)
@@ -91,7 +67,7 @@ fft_batched :: proc(t: ^testing.T) {
         r := om.view_row(x, row)
         want := om.fft(r)
         defer om.tensor_destroy(&want)
-        testing.expect(t, close(y.data[row * 8:][:8], want.data, 1e-12))
+        testing.expect(t, om.allclose(om.view_row(y, row), want, rtol = 0, atol = 1e-12))
     }
 }
 
@@ -113,7 +89,7 @@ fft_real_roundtrip :: proc(t: ^testing.T) {
     z := om.invrfft(y)
     defer om.tensor_destroy(&z)
     testing.expect_value(t, z.shape, x.shape)
-    testing.expect(t, close(z.data, x.data, 1e-12))
+    testing.expect(t, om.allclose(z, x, rtol = 0, atol = 1e-12))
     testing.expect(t, abs(real(y.data[0]) - sum) < 1e-10) // invrfft left its input alone
 
     // odd length needs n
@@ -126,7 +102,7 @@ fft_real_roundtrip :: proc(t: ^testing.T) {
     defer om.tensor_destroy(&wf)
     wb := om.invrfft(wf, n = 7)
     defer om.tensor_destroy(&wb)
-    testing.expect(t, close(wb.data, w.data, 1e-5))
+    testing.expect(t, om.allclose(wb, w, rtol = 0, atol = 1e-5))
 }
 
 @(test)
@@ -137,7 +113,7 @@ fft_plan_reused :: proc(t: ^testing.T) {
     defer om.fft_destroy(&fwd)
 
     for _ in 0 ..< 2 {
-        x := random_complex(complex128, shape)
+        x := om.random_complex(complex128, shape)
         defer om.tensor_destroy(&x)
         y := om.zeros(complex128, shape)
         defer om.tensor_destroy(&y)
@@ -147,20 +123,20 @@ fft_plan_reused :: proc(t: ^testing.T) {
             b := om.view_row(x, band)
             want := om.fft(b)
             defer om.tensor_destroy(&want)
-            testing.expect(t, close(y.data[band * 20:][:20], want.data, 1e-12))
+            testing.expect(t, om.allclose(om.view_row(y, band), want, rtol = 0, atol = 1e-12))
         }
     }
 
     // in place
     inv := om.fft_plan(complex128, complex128, shape, {.Inverse, .Batched, .In_Place})
     defer om.fft_destroy(&inv)
-    x := random_complex(complex128, shape)
+    x := om.random_complex(complex128, shape)
     defer om.tensor_destroy(&x)
     orig := om.tensor_copy(x)
     defer om.tensor_destroy(&orig)
     om.fft_execute(fwd, orig, x)
     om.fft_execute(inv, x, x)
-    testing.expect(t, close(x.data, orig.data, 1e-12))
+    testing.expect(t, om.allclose(x, orig, rtol = 0, atol = 1e-12))
 
     // real <-> complex, kind and direction picked from the element types
     r2c := om.fft_plan(f64, complex128, [2]int{6, 8})
@@ -175,7 +151,7 @@ fft_plan_reused :: proc(t: ^testing.T) {
 @(test)
 fft_unaligned_view :: proc(t: ^testing.T) {
     // a view starting 8 bytes into a buffer is not 16-byte aligned
-    buf := random_complex(complex64, [1]int{17})
+    buf := om.random_complex(complex64, [1]int{17})
     defer om.tensor_destroy(&buf)
     view := om.view_rows(buf, 1, 17)
     out := om.zeros(complex64, [1]int{16})
@@ -187,7 +163,7 @@ fft_unaligned_view :: proc(t: ^testing.T) {
 
     want := om.fft(view) // one-shots handle it themselves
     defer om.tensor_destroy(&want)
-    testing.expect(t, close(out.data, want.data, 1e-4))
+    testing.expect(t, om.allclose(out, want, rtol = 0, atol = 1e-4))
 }
 
 @(test)
@@ -196,8 +172,8 @@ fft_frequencies :: proc(t: ^testing.T) {
     f5 := om.fftfreq(5, 0.5)
     defer om.tensor_destroy(&f4)
     defer om.tensor_destroy(&f5)
-    testing.expect(t, close(f4.data, []f64{0, 0.25, -0.5, -0.25}, 1e-15))
-    testing.expect(t, close(f5.data, []f64{0, 0.4, 0.8, -0.8, -0.4}, 1e-15))
+    expect_close(t, f4.data, []f64{0, 0.25, -0.5, -0.25}, 1e-15)
+    expect_close(t, f5.data, []f64{0, 0.4, 0.8, -0.8, -0.4}, 1e-15)
 }
 
 // plans made and destroyed from several threads at once: the planner lock keeps FFTW safe

@@ -5,52 +5,37 @@ import "core:testing"
 
 import om ".."
 
-expect_close :: proc(t: ^testing.T, got, want: []$T, tol: f64, loc := #caller_location) {
-    testing.expect_value(t, len(got), len(want), loc = loc)
-    for x, i in got {
-        testing.expectf(
-            t,
-            f64(abs(x - want[i])) <= tol,
-            "entry %d: got %v want %v",
-            i,
-            x,
-            want[i],
-            loc = loc,
-        )
-    }
-}
-
 @(test)
 einsum_matmul_layouts :: proc(t: ^testing.T) {
-    A := random_matrix(f64, [2]int{3, 4})
+    A := om.randn(f64, [2]int{3, 4})
     defer om.tensor_destroy(&A)
-    B := random_matrix(f64, [2]int{4, 5})
+    B := om.randn(f64, [2]int{4, 5})
     defer om.tensor_destroy(&B)
     want := om.dot(A, B)
     defer om.tensor_destroy(&want)
 
     C := om.einsum(2, "ij,jk->ik", A, B)
     defer om.tensor_destroy(&C)
-    expect_close(t, C.data, want.data, 1e-12)
+    testing.expect(t, om.allclose(C, want, rtol = 0, atol = 1e-12))
 
     // B given as (k, j): gemm reads it transposed, no copy
     Bt := om.transpose(B)
     defer om.tensor_destroy(&Bt)
     C2 := om.einsum(2, "ij,kj->ik", A, Bt)
     defer om.tensor_destroy(&C2)
-    expect_close(t, C2.data, want.data, 1e-12)
+    testing.expect(t, om.allclose(C2, want, rtol = 0, atol = 1e-12))
 
     // transposed output: computed as B^T A^T
     Ct := om.einsum(2, "ij,jk->ki", A, B)
     defer om.tensor_destroy(&Ct)
     wantt := om.transpose(want)
     defer om.tensor_destroy(&wantt)
-    expect_close(t, Ct.data, wantt.data, 1e-12)
+    testing.expect(t, om.allclose(Ct, wantt, rtol = 0, atol = 1e-12))
 
     // outer and inner products
-    x := random_matrix(f64, [1]int{3})
+    x := om.randn(f64, [1]int{3})
     defer om.tensor_destroy(&x)
-    y := random_matrix(f64, [1]int{4})
+    y := om.randn(f64, [1]int{4})
     defer om.tensor_destroy(&y)
     outer := om.einsum(2, "i,j->ij", x, y)
     defer om.tensor_destroy(&outer)
@@ -68,7 +53,7 @@ einsum_matmul_layouts :: proc(t: ^testing.T) {
 einsum_overlap_conjugated :: proc(t: ^testing.T) {
     // S_ij = <psi_i|psi_j> = Σ_g conj(psi_ig) psi_jg for bands as rows
     nb, ng :: 3, 7
-    psi := random_matrix(complex128, [2]int{nb, ng})
+    psi := om.randn(complex128, [2]int{nb, ng})
     defer om.tensor_destroy(&psi)
     S := om.einsum(2, "ig*,jg->ij", psi, psi)
     defer om.tensor_destroy(&S)
@@ -87,9 +72,9 @@ einsum_overlap_conjugated :: proc(t: ^testing.T) {
 einsum_batched :: proc(t: ^testing.T) {
     // one gemm_batch over b, e.g. one small matrix product per k-point
     nk, m, k, n :: 4, 3, 5, 2
-    A := random_matrix(complex128, [3]int{nk, m, k})
+    A := om.randn(complex128, [3]int{nk, m, k})
     defer om.tensor_destroy(&A)
-    B := random_matrix(complex128, [3]int{nk, k, n})
+    B := om.randn(complex128, [3]int{nk, k, n})
     defer om.tensor_destroy(&B)
     C := om.einsum(3, "bij,bjk*->bik", A, B)
     defer om.tensor_destroy(&C)
@@ -110,9 +95,9 @@ einsum_batched :: proc(t: ^testing.T) {
 einsum_permuted :: proc(t: ^testing.T) {
     // every operand and the output need a copy into gemm's layout
     na, nb, nc, nj :: 2, 3, 4, 5
-    A := random_matrix(f64, [3]int{na, nj, nb})
+    A := om.randn(f64, [3]int{na, nj, nb})
     defer om.tensor_destroy(&A)
-    B := random_matrix(f64, [3]int{nb, nj, nc})
+    B := om.randn(f64, [3]int{nb, nj, nc})
     defer om.tensor_destroy(&B)
     C := om.einsum(3, "ajb,bjc->bca", A, B)
     defer om.tensor_destroy(&C)
@@ -140,14 +125,14 @@ einsum_permuted :: proc(t: ^testing.T) {
 @(test)
 einsum_loop_cases :: proc(t: ^testing.T) {
     n :: 4
-    A := random_matrix(f64, [2]int{n, n})
+    A := om.randn(f64, [2]int{n, n})
     defer om.tensor_destroy(&A)
 
     At := om.einsum(2, "ij->ji", A)
     defer om.tensor_destroy(&At)
     want_t := om.transpose(A)
     defer om.tensor_destroy(&want_t)
-    expect_close(t, At.data, want_t.data, 0)
+    testing.expect(t, om.allclose(At, want_t, rtol = 0, atol = 0))
 
     col_sums := om.einsum(1, "ij->j", A)
     defer om.tensor_destroy(&col_sums)
@@ -166,7 +151,7 @@ einsum_loop_cases :: proc(t: ^testing.T) {
     testing.expect(t, abs(tr.data[0] - om.trace(A)) < 1e-14)
 
     // a label summed within one operand only: (Σ_j A_ij)(Σ_k x_k)
-    x := random_matrix(f64, [1]int{3})
+    x := om.randn(f64, [1]int{3})
     defer om.tensor_destroy(&x)
     r := om.einsum(1, "ij,k->i", A, x)
     defer om.tensor_destroy(&r)
@@ -180,7 +165,7 @@ einsum_loop_cases :: proc(t: ^testing.T) {
     }
 
     // repeated label within an operand: A_ii x_i
-    y := random_matrix(f64, [1]int{n})
+    y := om.randn(f64, [1]int{n})
     defer om.tensor_destroy(&y)
     d := om.einsum(1, "ii,i->i", A, y)
     defer om.tensor_destroy(&d)
@@ -210,7 +195,7 @@ linalg_triangles :: proc(t: ^testing.T) {
     n :: 5
     H := random_hpd(complex128, n)
     defer om.tensor_destroy(&H)
-    B := random_matrix(complex128, [2]int{2, n})
+    B := om.randn(complex128, [2]int{2, n})
     defer om.tensor_destroy(&B)
     X := om.dot_triangular(H, B)
     defer om.tensor_destroy(&X)

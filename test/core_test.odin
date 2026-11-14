@@ -97,7 +97,7 @@ apply_on_views :: proc(t: ^testing.T) {
     shift :: proc(x, by: f64) -> f64 {
         return x + by
     }
-    A := random_matrix(f64, [2]int{3, 4})
+    A := om.randn(f64, [2]int{3, 4})
     defer om.tensor_destroy(&A)
     L := make_layouts(A)
     defer destroy_layouts(&L)
@@ -217,11 +217,9 @@ tensor_copies_reshapes_and_slices :: proc(t: ^testing.T) {
     pv := om.permute_view(A, {1, 2, 0})
     testing.expect_value(t, om.atv(pv, 2, 3, 1), om.atv(A, 1, 2, 3))
     s := om.atax(A, 3, axis = 2)
-    defer om.tensor_destroy(&s)
     testing.expect_value(t, s.shape, [2]int{2, 3})
     testing.expect_value(t, om.atv(s, 1, 2), om.atv(A, 1, 2, 3))
     s1 := om.atax(pv, 1, axis = 0)
-    defer om.tensor_destroy(&s1)
     testing.expect_value(t, om.atv(s1, 3, 1), om.atv(A, 1, 1, 3))
 
     // at through strides, with a fixed-size index too

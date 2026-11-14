@@ -8,7 +8,7 @@ import ob "../openblas"
 @(test)
 view_ownership :: proc(t: ^testing.T) {
     // views share data and free nothing; the memory tracker catches a double free
-    A := random_matrix(f64, [2]int{4, 3})
+    A := om.randn(f64, [2]int{4, 3})
     defer om.tensor_destroy(&A)
 
     r := om.view_row(A, 2)
@@ -77,18 +77,17 @@ view_boxes_and_assignment :: proc(t: ^testing.T) {
     defer om.tensor_destroy(&At)
     expect_close(t, P.data, At.data, 0)
 
-    // atax copies a slice along any axis
+    // atax only views a slice along any axis
     col2 := om.atax(A, 2, axis = 1)
-    defer om.tensor_destroy(&col2)
-    expect_close(t, col2.data, []f64{2, 1, 1, 17}, 0) // rows 1, 2 were assigned ones
+    testing.expect(t, om.allclose(col2, []f64{2, 1, 1, 17}, rtol = 0, atol = 0)) // rows 1, 2 were assigned ones
 }
 
 @(test)
 view_blas_products :: proc(t: ^testing.T) {
     // gemm and gemv straight on sub-blocks, transposed views and strided vectors, no copies
-    A := random_matrix(complex128, [2]int{6, 7})
+    A := om.randn(complex128, [2]int{6, 7})
     defer om.tensor_destroy(&A)
-    B := random_matrix(complex128, [2]int{5, 4})
+    B := om.randn(complex128, [2]int{5, 4})
     defer om.tensor_destroy(&B)
     C := om.zeros(complex128, [2]int{8, 8})
     defer om.tensor_destroy(&C)

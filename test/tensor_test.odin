@@ -25,7 +25,7 @@ tensor_from_existing_data :: proc(t: ^testing.T) {
     data := make([]f64, 4)
     data[2] = 3.5
 
-    tensor := om.tensor_from_data([2]int{2, 2}, data)
+    tensor := om.tensor_from_data([2]int{2, 2}, data, borrowed=false)
     defer om.tensor_destroy(&tensor)
 
     testing.expect_value(t, tensor.shape, [2]int{2, 2})

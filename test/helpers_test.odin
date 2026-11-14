@@ -74,7 +74,7 @@ helpers_matrix_checks :: proc(t: ^testing.T) {
 
 @(test)
 helpers_kernels_directly :: proc(t: ^testing.T) {
-    A := random_matrix(f64, [2]int{3, 4})
+    A := om.randn(f64, [2]int{3, 4})
     defer om.tensor_destroy(&A)
     out := om.zeros(f64, [2]int{3, 8})
     defer om.tensor_destroy(&out)
@@ -111,7 +111,7 @@ helpers_kernels_directly :: proc(t: ^testing.T) {
     testing.expect_value(t, om.reduce(A, .Sum), om.sum(A))
 
     // gemv into a strided output, accumulating
-    x := random_matrix(f64, [1]int{4})
+    x := om.randn(f64, [1]int{4})
     defer om.tensor_destroy(&x)
     py := om.ones(f64, [2]int{3, 2})
     defer om.tensor_destroy(&py)

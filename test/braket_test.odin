@@ -10,9 +10,9 @@ import ob "../openblas"
 @(test)
 braket_and_overlap_orthonormalization :: proc(t: ^testing.T) {
     nb, ng :: 4, 30
-    psi := random_matrix(complex128, [2]int{nb, ng})
+    psi := om.randn(complex128, [2]int{nb, ng})
     defer om.tensor_destroy(&psi)
-    phi := random_matrix(complex128, [2]int{3, ng})
+    phi := om.randn(complex128, [2]int{3, ng})
     defer om.tensor_destroy(&phi)
 
     // <psi_i|phi_j>, and the herk path for <psi_i|psi_j>
@@ -37,9 +37,9 @@ braket_and_overlap_orthonormalization :: proc(t: ^testing.T) {
         }
     }
     // real rows: the conjugating ops fall back to plain ones
-    R := random_matrix(f64, [2]int{2, 5})
+    R := om.randn(f64, [2]int{2, 5})
     defer om.tensor_destroy(&R)
-    R2 := random_matrix(f64, [2]int{3, 5})
+    R2 := om.randn(f64, [2]int{3, 5})
     defer om.tensor_destroy(&R2)
     PR := om.braket(R, R2)
     defer om.tensor_destroy(&PR)
@@ -98,9 +98,9 @@ braket_and_overlap_orthonormalization :: proc(t: ^testing.T) {
 @(test)
 residuals_and_broadcasting :: proc(t: ^testing.T) {
     nb, ng :: 3, 8
-    Hpsi := random_matrix(complex128, [2]int{nb, ng})
+    Hpsi := om.randn(complex128, [2]int{nb, ng})
     defer om.tensor_destroy(&Hpsi)
-    Spsi := random_matrix(complex128, [2]int{nb, ng})
+    Spsi := om.randn(complex128, [2]int{nb, ng})
     defer om.tensor_destroy(&Spsi)
     eps := om.zeros(f64, [1]int{nb})
     defer om.tensor_destroy(&eps)
@@ -178,7 +178,7 @@ grids_gather_scatter :: proc(t: ^testing.T) {
     }
     testing.expect_value(t, len(index), 19) // |G|^2 <= 2: 1 + 6 + 12
 
-    c := random_matrix(complex128, [1]int{len(index)})
+    c := om.randn(complex128, [1]int{len(index)})
     defer om.tensor_destroy(&c)
     grid := om.zeros(complex128, [3]int{n, n, n})
     defer om.tensor_destroy(&grid)
@@ -323,7 +323,7 @@ tensor_niceties :: proc(t: ^testing.T) {
         1e-14,
     )
     // band-summed density from |psi|^2
-    psi := random_matrix(complex128, [2]int{3, 5})
+    psi := om.randn(complex128, [2]int{3, 5})
     defer om.tensor_destroy(&psi)
     dens2 := om.abs2(psi)
     defer om.tensor_destroy(&dens2)
@@ -355,7 +355,7 @@ threads_and_files :: proc(t: ^testing.T) {
         om.set_num_threads(2)
         defer om.set_num_threads(1)
     }
-    x := random_matrix(complex128, [3]int{8, 8, 8})
+    x := om.randn(complex128, [3]int{8, 8, 8})
     defer om.tensor_destroy(&x)
     y := om.fft(x)
     defer om.tensor_destroy(&y)
@@ -364,7 +364,7 @@ threads_and_files :: proc(t: ^testing.T) {
     testing.expect(t, om.allclose(z, x, 0, 1e-12))
 
     // save any view, load it back contiguous
-    A := random_matrix(f64, [2]int{3, 5})
+    A := om.randn(f64, [2]int{3, 5})
     defer om.tensor_destroy(&A)
     // TODO: better temporary path
     path := "/tmp/view.npy"
@@ -389,7 +389,7 @@ rayleigh_ritz :: proc(t: ^testing.T) {
     om.imultiply(&Q, complex128(0.05))
     dq := om.diagonal(Q)
     om.iadd(&dq, complex128(1)) // S = 1 + Q
-    psi := random_matrix(complex128, [2]int{ng, ng})
+    psi := om.randn(complex128, [2]int{ng, ng})
     defer om.tensor_destroy(&psi)
 
     // operators act on rows: (A psi_i) as a row is psi_i A^T

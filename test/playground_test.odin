@@ -40,8 +40,8 @@ playground :: proc(t: ^testing.T) {
 
     // a := om.arange(f64, 0.0, 2.0, 0.1)
     // om.print(a, format="%.4f")
-    a := om.zeros(complex128, [2]int{3, 3})
-    defer om.tensor_destroy(&a)
-    fmt.println(imag(a.data[0]))
+    // a := om.zeros(complex128, [2]int{3, 3})
+    // defer om.tensor_destroy(&a)
+    // fmt.println(imag(a.data[0]))
 }
 
