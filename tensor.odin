@@ -70,7 +70,8 @@ is_aligned :: proc(t: Tensor($T, $N)) -> bool {
 tensor_from_data :: proc(
     shape: [$N]int,
     data: []$T,
-    allocator := context.allocator,
+    borrowed := true,
+    allocator := context.allocator, // only effective in case of borrowed=false
 ) -> Tensor(T, N) {
 
     size: int = 1
@@ -80,9 +81,10 @@ tensor_from_data :: proc(
     assert(len(data) == size)
     return Tensor(T, N) {
         allocator = allocator,
+        data = data,
         shape = shape,
         strides = strides(shape),
-        data = data,
+        borrowed = borrowed,
     }
 }
 
@@ -112,7 +114,10 @@ tensor_complex64_from_parts_slice :: proc(
 }
 
 @(require_results)
-tensor_complex64_from_parts_tensor :: proc(re, im: Tensor(f32, $N), allocator := context.allocator) -> Tensor(complex64, N) {
+tensor_complex64_from_parts_tensor :: proc(
+    re, im: Tensor(f32, $N),
+    allocator := context.allocator,
+) -> Tensor(complex64, N) {
     res := zeros(complex64, re.shape, allocator)
     complex_into(res, re, im)
     return res
@@ -143,7 +148,10 @@ tensor_complex128_from_parts_slice :: proc(
 }
 
 @(require_results)
-tensor_complex128_from_parts_tensor :: proc(re, im: Tensor(f64, $N), allocator := context.allocator) -> Tensor(complex128, N) {
+tensor_complex128_from_parts_tensor :: proc(
+    re, im: Tensor(f64, $N),
+    allocator := context.allocator,
+) -> Tensor(complex128, N) {
     res := zeros(complex128, re.shape, allocator)
     complex_into(res, re, im)
     return res
