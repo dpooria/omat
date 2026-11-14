@@ -76,13 +76,12 @@ atv :: proc {
     atv_indices_arr,
 }
 
-// A copy of t[..., index, ...] along axis
+// A view of t[..., index, ...] along axis
 @(require_results)
 atax :: proc(
     t: Tensor($T, $N),
     index: int,
     axis: int = 0,
-    allocator := context.allocator,
 ) -> Tensor(T, N - 1) where N > 1 {
     assert(0 <= axis && axis < N)
     // bring axis to the front, then take its row
@@ -95,7 +94,7 @@ atax :: proc(
             next += 1
         }
     }
-    return tensor_copy(view_row(permute_view(t, axes[:]), index), allocator)
+    return view_row(permute_view(t, axes[:]), index)
 }
 
 
