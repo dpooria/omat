@@ -60,7 +60,10 @@ min :: proc(t: Tensor($T, $N)) -> T where !intrinsics.type_is_complex(T) {
 }
 
 // index of the first largest (largest = true) or smallest element
-arg_extreme :: proc(t: Tensor($T, $N), largest: bool) -> [N]int where !intrinsics.type_is_complex(T) {
+arg_extreme :: proc(
+    t: Tensor($T, $N),
+    largest: bool,
+) -> [N]int where !intrinsics.type_is_complex(T) {
     l := plan_loop(t.shape, t.strides)
     assert(l.rows > 0, "argmax, argmin: need at least one element")
     step := loop_step(l, t.strides)
@@ -116,7 +119,8 @@ reduce_axis :: proc(
     axis: int,
     $op: ReduceOp,
     allocator := context.allocator,
-) -> Tensor(T, N - 1) where N > 1 {
+) -> Tensor(T, N - 1) where N >
+    1 {
     assert(0 <= axis && axis < N, "reduce_axis: bad axis")
     // move axis last, then every row of the loop is one output element, in row-major order
     axes: [N]int
@@ -169,12 +173,20 @@ reduce_axis :: proc(
 }
 
 @(require_results)
-sum_axis :: proc(t: Tensor($T, $N), axis: int, allocator := context.allocator) -> Tensor(T, N - 1) {
+sum_axis :: proc(
+    t: Tensor($T, $N),
+    axis: int,
+    allocator := context.allocator,
+) -> Tensor(T, N - 1) {
     return reduce_axis(t, axis, .Sum, allocator)
 }
 
 @(require_results)
-prod_axis :: proc(t: Tensor($T, $N), axis: int, allocator := context.allocator) -> Tensor(T, N - 1) {
+prod_axis :: proc(
+    t: Tensor($T, $N),
+    axis: int,
+    allocator := context.allocator,
+) -> Tensor(T, N - 1) {
     return reduce_axis(t, axis, .Prod, allocator)
 }
 
@@ -197,14 +209,18 @@ min_axis :: proc(
 }
 
 @(require_results)
-mean_axis :: proc(t: Tensor($T, $N), axis: int, allocator := context.allocator) -> Tensor(T, N - 1) {
+mean_axis :: proc(
+    t: Tensor($T, $N),
+    axis: int,
+    allocator := context.allocator,
+) -> Tensor(T, N - 1) {
     res := reduce_axis(t, axis, .Sum, allocator)
     idivide(&res, T(f64(t.shape[axis])))
     return res
 }
 
-// |a - b| <= atol + rtol |b| for every element, as numpy's allclose
-allclose :: proc(a, b: Tensor($T, $N), rtol := 1e-5, atol := 1e-8) -> bool {
+// |a - b| <= atol + rtol |b| for every element, as numpy's allclose (tensor-tensor)
+allclose_tt :: proc(a, b: Tensor($T, $N), rtol := 1e-5, atol := 1e-8) -> bool {
     assert(a.shape == b.shape, "allclose: shapes differ")
     l := plan_loop(a.shape, a.strides, b.strides)
     sa, sb := loop_step(l, a.strides), loop_step(l, b.strides)
@@ -219,3 +235,16 @@ allclose :: proc(a, b: Tensor($T, $N), rtol := 1e-5, atol := 1e-8) -> bool {
     }
     return true
 }
+
+// |a - b| <= atol + rtol |b| for every element, as numpy's allclose (tensor-slice)
+allclose_ts :: proc(a: Tensor($T, $N), b: []T, rtol := 1e-5, atol := 1e-8) -> bool {
+    assert(size_of_shape(a.shape) == len(b), "allclose: size mismatch")
+    return allclose_tt(a, tensor_from_data(a.shape, b))
+}
+
+// |a - b| <= atol + rtol |b| for every element, as numpy's allclose
+allclose :: proc {
+    allclose_tt,
+    allclose_ts,
+}
+
