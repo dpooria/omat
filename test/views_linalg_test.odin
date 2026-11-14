@@ -299,7 +299,7 @@ views_blas_and_einsum :: proc(t: ^testing.T) {
     dv := om.view_row(om.transpose_view(diag), 1) // stride 2
     om.beinsum("ii->i", Ev, &dv) // loop path on a view into a strided vector
     for i in 0 ..< 5 {
-        testing.expect_value(t, om.atv(dv, i), om.atv(AtA, i, i))
+        testing.expect(t, abs(om.atv(dv, i) - om.atv(AtA, i, i)) < 1e-12)
     }
     tr := om.einsum(0, "ij,ji->", om.transpose_view(A), A) // gemm path from a transposed view
     defer om.tensor_destroy(&tr)

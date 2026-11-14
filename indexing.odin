@@ -76,28 +76,6 @@ atv :: proc {
     atv_indices_arr,
 }
 
-// A view of t[..., index, ...] along axis
-@(require_results)
-atax :: proc(
-    t: Tensor($T, $N),
-    index: int,
-    axis: int = 0,
-) -> Tensor(T, N - 1) where N > 1 {
-    assert(0 <= axis && axis < N)
-    // bring axis to the front, then take its row
-    axes: [N]int
-    axes[0] = axis
-    next := 1
-    for d in 0 ..< N {
-        if d != axis {
-            axes[next] = d
-            next += 1
-        }
-    }
-    return view_row(permute_view(t, axes[:]), index)
-}
-
-
 // row-major strides of a contiguous tensor of this shape
 strides :: proc(shape: [$N]int) -> [N]int {
     strides: [N]int
@@ -112,7 +90,11 @@ strides :: proc(shape: [$N]int) -> [N]int {
 
 // A contiguous copy of t with a new shape of the same size, elements in row-major order
 @(require_results)
-reshape :: proc(t: Tensor($T, $N), shape: [$M]int, allocator := context.allocator) -> Tensor(T, M) {
+reshape :: proc(
+    t: Tensor($T, $N),
+    shape: [$M]int,
+    allocator := context.allocator,
+) -> Tensor(T, M) {
     assert(size_of_shape(shape) == size_of_shape(t.shape), "reshape: sizes differ")
     res := zeros(T, shape, allocator)
     // res's memory seen in t's shape, so one strided pass copies in row-major order
@@ -138,17 +120,5 @@ ireshape :: proc(t: Tensor($T, $N), shape: [$M]int) -> Tensor(T, M) {
         strides = strides(shape),
         borrowed = t.borrowed,
     }
-}
-
-
-// Axis i of the result is axis axes[i] of t, as numpy's transpose(t, axes)
-@(require_results)
-permute_axes :: proc(
-    t: Tensor($T, $N),
-    axes: []int,
-    allocator := context.allocator,
-) -> Tensor(T, N) where N >
-    0 {
-    return tensor_copy(permute_view(t, axes), allocator)
 }
 

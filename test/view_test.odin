@@ -71,14 +71,14 @@ view_boxes_and_assignment :: proc(t: ^testing.T) {
     testing.expect_value(t, om.atv(A, 1, 4), -1.0)
     testing.expect_value(t, om.atv(A, 2, 4), 14.0)
 
-    P := om.permute_axes(A, {1, 0})
+    P := om.tensor_copy(om.permute_view(A, {1, 0}))
     defer om.tensor_destroy(&P)
     At := om.transpose(A)
     defer om.tensor_destroy(&At)
     expect_close(t, P.data, At.data, 0)
 
-    // atax only views a slice along any axis
-    col2 := om.atax(A, 2, axis = 1)
+    // view_axis only views a slice along any axis
+    col2 := om.view_axis(A, 2, axis = 1)
     testing.expect(t, om.allclose(col2, []f64{2, 1, 1, 17}, rtol = 0, atol = 0)) // rows 1, 2 were assigned ones
 }
 

@@ -125,6 +125,18 @@ apply_on_views :: proc(t: ^testing.T) {
 }
 
 @(test)
+allclose_respects_tolerances :: proc(t: ^testing.T) {
+    A := om.tensor_from_data([1]int{2}, []f64{1, 2})
+    want := []f64{1 + 1e-6, 2}
+    B := om.tensor_from_data(A.shape, want)
+
+    testing.expect(t, om.allclose(A, B))
+    testing.expect(t, om.allclose(A, want))
+    testing.expect(t, !om.allclose(A, B, rtol = 0, atol = 1e-12))
+    testing.expect(t, !om.allclose(A, want, rtol = 0, atol = 1e-12))
+}
+
+@(test)
 creation_and_fills :: proc(t: ^testing.T) {
     I := om.identity(complex64, 3)
     defer om.tensor_destroy(&I)
@@ -210,16 +222,16 @@ tensor_copies_reshapes_and_slices :: proc(t: ^testing.T) {
     testing.expect_value(t, flat.strides, [1]int{1})
 
     // permutations and slices along any axis
-    P := om.permute_axes(A, {2, 0, 1})
+    P := om.tensor_copy(om.permute_view(A, {2, 0, 1}))
     defer om.tensor_destroy(&P)
     testing.expect_value(t, P.shape, [3]int{4, 2, 3})
     testing.expect_value(t, om.atv(P, 3, 1, 2), om.atv(A, 1, 2, 3))
     pv := om.permute_view(A, {1, 2, 0})
     testing.expect_value(t, om.atv(pv, 2, 3, 1), om.atv(A, 1, 2, 3))
-    s := om.atax(A, 3, axis = 2)
+    s := om.view_axis(A, 3, axis = 2)
     testing.expect_value(t, s.shape, [2]int{2, 3})
     testing.expect_value(t, om.atv(s, 1, 2), om.atv(A, 1, 2, 3))
-    s1 := om.atax(pv, 1, axis = 0)
+    s1 := om.view_axis(pv, 1, axis = 0)
     testing.expect_value(t, om.atv(s1, 3, 1), om.atv(A, 1, 1, 3))
 
     // at through strides, with a fixed-size index too

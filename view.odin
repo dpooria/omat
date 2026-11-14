@@ -44,6 +44,22 @@ view_row :: proc(t: Tensor($T, $N), i: int) -> Tensor(T, N - 1) where N > 1 {
     return res
 }
 
+// t[..., index, ...] along axis, one rank lower: view_axis(A, j, 1) is column j of a matrix
+view_axis :: proc(t: Tensor($T, $N), index: int, axis := 0) -> Tensor(T, N - 1) where N > 1 {
+    assert(0 <= axis && axis < N, "view_axis: bad axis")
+    // bring axis to the front, then take its row
+    axes: [N]int
+    axes[0] = axis
+    next := 1
+    for d in 0 ..< N {
+        if d != axis {
+            axes[next] = d
+            next += 1
+        }
+    }
+    return view_row(permute_view(t, axes[:]), index)
+}
+
 // Axis i of the result is axis axes[i] of t, without copying
 permute_view :: proc(t: Tensor($T, $N), axes: []int) -> Tensor(T, N) {
     assert(len(axes) == N, "permute_view: one entry per axis")

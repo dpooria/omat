@@ -488,3 +488,35 @@ linalg_det_norm_trace :: proc(t: ^testing.T) {
     testing.expect(t, math.is_inf(logabs, -1))
 }
 
+@(test)
+linalg_propagator :: proc(t: ^testing.T) {
+    // exp(-i H dt) from complex weights: unitary, and e^{-i w dt} on each eigenvector
+    n :: 6
+    dt :: 0.3
+    H := random_hpd(complex128, n)
+    defer om.tensor_destroy(&H)
+    w, V, _ := om.eigh(H)
+    defer om.tensor_destroy(&w)
+    defer om.tensor_destroy(&V)
+    phases := om.zeros(complex128, [1]int{n})
+    defer om.tensor_destroy(&phases)
+    for x, i in w.data {
+        phases.data[i] = complex(math.cos(x * dt), -math.sin(x * dt))
+    }
+    P := om.from_eigh(phases, V)
+    defer om.tensor_destroy(&P)
+
+    I := om.dot(P, P, transB = .ConjTrans)
+    defer om.tensor_destroy(&I)
+    for i in 0 ..< n {
+        for j in 0 ..< n {
+            want := complex128(1) if i == j else 0
+            testing.expect(t, abs(I.data[i * n + j] - want) < 1e-12)
+        }
+    }
+    for i in 0 ..< n {
+        v := row(V, i)
+        testing.expect(t, residual(P, v, phases.data[i], v) < 1e-12)
+    }
+}
+

@@ -17,10 +17,10 @@ at_reads_and_writes_an_element :: proc(t: ^testing.T) {
 }
 
 @(test)
-atax_rank3 :: proc(t: ^testing.T) {
+view_axis_rank3 :: proc(t: ^testing.T) {
     a := om.random_normal([3]int{2, 3, 4})
     defer om.tensor_destroy(&a)
-    a_at0 := om.atax(a, 0, 0)
+    a_at0 := om.view_axis(a, 0, 0)
 
     for i in 0 ..< a.shape[1] {
         for j in 0 ..< a.shape[2] {
@@ -28,7 +28,7 @@ atax_rank3 :: proc(t: ^testing.T) {
         }
     }
 
-    a_at2 := om.atax(a, 1, 2)
+    a_at2 := om.view_axis(a, 1, 2)
     for i in 0 ..< a.shape[0] {
         for j in 0 ..< a.shape[1] {
             testing.expect_value(t, om.atv(a, i, j, 1), om.atv(a_at2, i, j))
