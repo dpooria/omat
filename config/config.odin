@@ -27,4 +27,7 @@ BLAS_ILP64 :: #config(OMAT_BLAS_ILP64, false)
 // disables cblas extensions and linking against openblas specific bindings.
 // A working omat compile still needs LAPCKE and BLAS
 DISABLE_OPENBLAS :: #config(OMAT_DISABLE_OPENBLAS, false)
+// The BLAS has a working cblas_?gemm_batch for batched einsum
+// disabled by default due to a bug in OpenBLAS versions 0.3.28 to 0.3.34 built with DYNAMIC_ARCH
+BLAS_HAS_GEMM_BATCH :: #config(OMAT_BLAS_HAS_GEMM_BATCH, false)
 

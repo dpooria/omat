@@ -210,20 +210,19 @@ foreign cblas {
         dimatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: f64, a: [^]f64, lda: blasint, rda: blasint) ---
         cimatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: ^complex64, a: [^]complex64, lda: blasint, ldb: blasint) ---
         zimatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: ^complex128, a: [^]complex128, lda: blasint, ldb: blasint) ---
-
-        sgemm_batch :: proc(order: Order, TransA_array: [^]Transpose, TransB_array: [^]Transpose, M_array: [^]blasint, N_array: [^]blasint, K_array: [^]blasint, alpha_array: [^]f32, A_array: [^][^]f32, lda_array: [^]blasint, B_array: [^][^]f32, ldb_array: [^]blasint, beta_array: [^]f32, C_array: [^][^]f32, ldc_array: [^]blasint, group_count: blasint, group_size: [^]blasint) ---
-
-        dgemm_batch :: proc(order: Order, TransA_array: [^]Transpose, TransB_array: [^]Transpose, M_array: [^]blasint, N_array: [^]blasint, K_array: [^]blasint, alpha_array: [^]f64, A_array: [^][^]f64, lda_array: [^]blasint, B_array: [^][^]f64, ldb_array: [^]blasint, beta_array: [^]f64, C_array: [^][^]f64, ldc_array: [^]blasint, group_count: blasint, group_size: [^]blasint) ---
-
-        cgemm_batch :: proc(order: Order, TransA_array: [^]Transpose, TransB_array: [^]Transpose, M_array: [^]blasint, N_array: [^]blasint, K_array: [^]blasint, alpha_array: [^]complex64, A_array: [^][^]complex64, lda_array: [^]blasint, B_array: [^][^]complex64, ldb_array: [^]blasint, beta_array: [^]complex64, C_array: [^][^]complex64, ldc_array: [^]blasint, group_count: blasint, group_size: [^]blasint) ---
-
-        zgemm_batch :: proc(order: Order, TransA_array: [^]Transpose, TransB_array: [^]Transpose, M_array: [^]blasint, N_array: [^]blasint, K_array: [^]blasint, alpha_array: [^]complex128, A_array: [^][^]complex128, lda_array: [^]blasint, B_array: [^][^]complex128, ldb_array: [^]blasint, beta_array: [^]complex128, C_array: [^][^]complex128, ldc_array: [^]blasint, group_count: blasint, group_size: [^]blasint) ---
     } else {
         cdotc_sub :: proc(n: blasint, x: [^]complex64, incx: blasint, y: [^]complex64, incy: blasint, result: ^complex64) ---
 
         cdotu_sub :: proc(n: blasint, x: [^]complex64, incx: blasint, y: [^]complex64, incy: blasint, result: ^complex64) ---
         zdotc_sub :: proc(n: blasint, x: [^]complex128, incx: blasint, y: [^]complex128, incy: blasint, result: ^complex128) ---
         zdotu_sub :: proc(n: blasint, x: [^]complex128, incx: blasint, y: [^]complex128, incy: blasint, result: ^complex128) ---
+    }
+    // not in every CBLAS: OpenBLAS, AOCL-BLAS and MKL have it, Netlib does not
+    when config.BLAS_HAS_GEMM_BATCH {
+        sgemm_batch :: proc(order: Order, TransA_array: [^]Transpose, TransB_array: [^]Transpose, M_array: [^]blasint, N_array: [^]blasint, K_array: [^]blasint, alpha_array: [^]f32, A_array: [^][^]f32, lda_array: [^]blasint, B_array: [^][^]f32, ldb_array: [^]blasint, beta_array: [^]f32, C_array: [^][^]f32, ldc_array: [^]blasint, group_count: blasint, group_size: [^]blasint) ---
+        dgemm_batch :: proc(order: Order, TransA_array: [^]Transpose, TransB_array: [^]Transpose, M_array: [^]blasint, N_array: [^]blasint, K_array: [^]blasint, alpha_array: [^]f64, A_array: [^][^]f64, lda_array: [^]blasint, B_array: [^][^]f64, ldb_array: [^]blasint, beta_array: [^]f64, C_array: [^][^]f64, ldc_array: [^]blasint, group_count: blasint, group_size: [^]blasint) ---
+        cgemm_batch :: proc(order: Order, TransA_array: [^]Transpose, TransB_array: [^]Transpose, M_array: [^]blasint, N_array: [^]blasint, K_array: [^]blasint, alpha_array: [^]complex64, A_array: [^][^]complex64, lda_array: [^]blasint, B_array: [^][^]complex64, ldb_array: [^]blasint, beta_array: [^]complex64, C_array: [^][^]complex64, ldc_array: [^]blasint, group_count: blasint, group_size: [^]blasint) ---
+        zgemm_batch :: proc(order: Order, TransA_array: [^]Transpose, TransB_array: [^]Transpose, M_array: [^]blasint, N_array: [^]blasint, K_array: [^]blasint, alpha_array: [^]complex128, A_array: [^][^]complex128, lda_array: [^]blasint, B_array: [^][^]complex128, ldb_array: [^]blasint, beta_array: [^]complex128, C_array: [^][^]complex128, ldc_array: [^]blasint, group_count: blasint, group_size: [^]blasint) ---
     }
 }
 

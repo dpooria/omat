@@ -435,16 +435,6 @@ when !config.DISABLE_OPENBLAS {
         zimatcopy_value,
     }
 
-    // Many independent gemms in one call; each of the group_count groups shares its sizes, scalars
-    // and transposes, and holds group_size matrices given by the pointer arrays.
-    gemm_batch :: proc {
-        sgemm_batch,
-        dgemm_batch,
-        cgemm_batch,
-        zgemm_batch,
-    }
-
-
 } else {
     cdotc :: proc(
         n: blasint,
@@ -491,7 +481,133 @@ when !config.DISABLE_OPENBLAS {
         zdotu_sub(n, x, incx, y, incy, &result)
         return result
     }
+}
 
+when config.BLAS_HAS_GEMM_BATCH {
+    @(private = "file")
+    complex_gemm_batch :: proc {
+        cgemm_batch,
+        zgemm_batch,
+    }
 
+    // c/zgemm_batch; without OpenBLAS the matrices read ConjNoTrans go as conjugated packed copies,
+    // as in conj_no_trans
+    gemm_batch_complex :: proc(
+        order: Order,
+        transA, transB: [^]Transpose,
+        M, N, K: [^]blasint,
+        alpha: [^]$T,
+        A: [^][^]T,
+        lda: [^]blasint,
+        B: [^][^]T,
+        ldb: [^]blasint,
+        beta: [^]T,
+        C: [^][^]T,
+        ldc: [^]blasint,
+        group_count: blasint,
+        group_size: [^]blasint,
+    ) {
+        // OpenBLAS reads ConjNoTrans; other CBLAS need conjugated copies of those matrices
+        needs_copies := false
+        when config.DISABLE_OPENBLAS {
+            for g in 0 ..< int(group_count) {
+                if transA[g] == .ConjNoTrans || transB[g] == .ConjNoTrans {
+                    needs_copies = true
+                }
+            }
+        }
+        if !needs_copies {
+            complex_gemm_batch(
+                order,
+                transA,
+                transB,
+                M,
+                N,
+                K,
+                alpha,
+                A,
+                lda,
+                B,
+                ldb,
+                beta,
+                C,
+                ldc,
+                group_count,
+                group_size,
+            )
+            return
+        }
+
+        // A's transposes, leading dimensions and pointers first, then B's
+        groups := int(group_count)
+        count := 0
+        for g in 0 ..< groups {
+            count += int(group_size[g])
+        }
+        trans := make([]Transpose, 2 * groups)
+        defer delete(trans)
+        ld := make([]blasint, 2 * groups)
+        defer delete(ld)
+        pointers := make([][^]T, 2 * count)
+        defer delete(pointers)
+        copies := make([][]T, 2 * count)
+        defer {
+            for c in copies {
+                delete(c)
+            }
+            delete(copies)
+        }
+        i := 0
+        for g in 0 ..< groups {
+            trans[g], trans[groups + g] = transA[g], transB[g]
+            ld[g], ld[groups + g] = lda[g], ldb[g]
+            for _ in 0 ..< group_size[g] {
+                a, b := i, count + i
+                copies[a], pointers[a], ld[g], trans[g] = conj_no_trans(
+                    order,
+                    transA[g],
+                    M[g],
+                    K[g],
+                    A[i],
+                    lda[g],
+                )
+                copies[b], pointers[b], ld[groups + g], trans[groups + g] = conj_no_trans(
+                    order,
+                    transB[g],
+                    K[g],
+                    N[g],
+                    B[i],
+                    ldb[g],
+                )
+                i += 1
+            }
+        }
+        complex_gemm_batch(
+            order,
+            raw_data(trans),
+            raw_data(trans[groups:]),
+            M,
+            N,
+            K,
+            alpha,
+            raw_data(pointers),
+            raw_data(ld),
+            raw_data(pointers[count:]),
+            raw_data(ld[groups:]),
+            beta,
+            C,
+            ldc,
+            group_count,
+            group_size,
+        )
+    }
+
+    // Many independent gemms in one call; each of the group_count groups shares its sizes, scalars
+    // and transposes, and holds group_size matrices given by the pointer arrays.
+    gemm_batch :: proc {
+        sgemm_batch,
+        dgemm_batch,
+        gemm_batch_complex,
+    }
 }
 
