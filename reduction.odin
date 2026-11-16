@@ -2,7 +2,9 @@ package omat
 
 import "base:builtin"
 import "base:intrinsics"
+import "config"
 import "core:math"
+import ob "openblas"
 
 // Reductions over all elements of a tensor or view.
 
@@ -44,13 +46,27 @@ reduce :: proc(t: Tensor($T, $N), $op: ReduceOp) -> T {
 }
 
 sum :: proc(t: Tensor($T, $N)) -> T {
+    when !config.DISABLE_OPENBLAS && (T == f32 || T == f64) {
+        l := plan_loop(t.shape, t.strides)
+        step := ob.blasint(loop_step(l, t.strides))
+        if step > 0 {
+            total: T
+            for r in 0 ..< l.rows {
+                row := raw_data(t.data[row_offset(l, r, t.strides):])
+                total += ob.sum(ob.blasint(l.n), row, step)
+            }
+            return total
+        }
+    }
     return reduce(t, .Sum)
+
 }
 
 prod :: proc(t: Tensor($T, $N)) -> T {
     return reduce(t, .Prod)
 }
 
+// TODO: OpenBLAS path for min and max
 max :: proc(t: Tensor($T, $N)) -> T where !intrinsics.type_is_complex(T) {
     return reduce(t, .Max)
 }

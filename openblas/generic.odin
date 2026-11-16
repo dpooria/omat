@@ -435,6 +435,13 @@ when !config.DISABLE_OPENBLAS {
         zimatcopy_value,
     }
 
+    sum :: proc {
+        ssum,
+        dsum,
+        scsum,
+        dzsum,
+    }
+
 } else {
     cdotc :: proc(
         n: blasint,

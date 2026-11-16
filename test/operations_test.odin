@@ -4,6 +4,7 @@ import "core:math"
 import "core:testing"
 
 import om ".."
+import "../config"
 import ob "../openblas"
 
 // typed forms of core:math's generic procedures, to pass as values
@@ -431,7 +432,8 @@ ops_binary_in_place :: proc(t: ^testing.T) {
             }
             testing.expectf(t, max_diff(L.boxed, want) < 1e-12, "%v %v", op, form)
             // the margin around the box is untouched
-            testing.expect_value(t, om.sum(L.parent) - om.sum(L.boxed), 0.0)
+            tol := 0.0 if config.DISABLE_OPENBLAS else 1e-12
+            testing.expect(t, abs(om.sum(L.parent) - om.sum(L.boxed)) < tol)
             om.tensor_destroy(&want)
             destroy_layouts(&L)
         }

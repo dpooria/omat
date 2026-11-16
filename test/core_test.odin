@@ -242,7 +242,7 @@ tensor_copies_reshapes_and_slices :: proc(t: ^testing.T) {
     S := om.zeros(f32, [0]int{})
     defer om.tensor_destroy(&S)
     om.fill(&S, 2)
-    testing.expect_value(t, om.sum(S), 2)
+    testing.expect(t, abs(om.sum(S) - 2) < 1e-12)
     testing.expect_value(t, len(S.data), 1)
 }
 

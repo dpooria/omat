@@ -108,7 +108,7 @@ helpers_kernels_directly :: proc(t: ^testing.T) {
     u := om.unary(f32, A, .Copy) // converting copy
     defer om.tensor_destroy(&u)
     testing.expect_value(t, u.data[5], f32(A.data[5]))
-    testing.expect_value(t, om.reduce(A, .Sum), om.sum(A))
+    testing.expect(t, abs(om.reduce(A, .Sum)- om.sum(A)) < 1e-12)
 
     // gemv into a strided output, accumulating
     x := om.randn(f64, [1]int{4})
