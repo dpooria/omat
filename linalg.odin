@@ -884,11 +884,11 @@ bbraket :: proc(A, B: Tensor($T, 2), C: ^Tensor(T, 2)) {
     same := raw_data(A.data) == raw_data(B.data) && A.shape == B.shape && A.strides == B.strides
     if same {
         // <a_i|a_j> = conj((A A^H)[i, j])
-        bdot_mm(A, A, C, ob.Transpose.NoTrans, ob.Transpose.ConjTrans)
+        bdot_mm(A, A, C, .NoTrans, .ConjTrans)
         iconjugate(C)
         return
     }
-    bdot_mm(A, B, C, ob.Transpose.ConjNoTrans, ob.Transpose.Trans)
+    bdot_mm(A, B, C, .ConjNoTrans, .Trans)
 }
 
 @(require_results)
@@ -1113,16 +1113,22 @@ det :: proc(A: Tensor($T, 2)) -> T {
 norm :: proc(t: Tensor($T, $N)) -> intrinsics.type_elem_type(T) {
     l := plan_loop(t.shape, t.strides)
     step := ob.blasint(loop_step(l, t.strides))
-    // nrm2 per row, which avoids overflow within a row
     total: intrinsics.type_elem_type(T)
     for r in 0 ..< l.rows {
-        row_norm := ob.nrm2(ob.blasint(l.n), raw_data(t.data[row_offset(l, r, t.strides):]), step)
+        row := raw_data(t.data[row_offset(l, r, t.strides):])
+        row_norm: intrinsics.type_elem_type(T)
+        if step == 0 {
+            // A broadcast row repeats one element.
+            row_norm = ob.nrm2(1, row, 1) * math.sqrt(intrinsics.type_elem_type(T)(l.n))
+        } else {
+            row_norm = ob.nrm2(ob.blasint(l.n), row, step)
+        }
         if l.rows == 1 {
             return row_norm
         }
-        total += row_norm * row_norm
+        total = math.hypot(total, row_norm)
     }
-    return math.sqrt(total)
+    return total
 }
 
 trace :: proc(A: Tensor($T, 2)) -> T {
