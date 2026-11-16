@@ -20,59 +20,16 @@ foreign cblas {
     dzasum :: proc(n: blasint, x: [^]complex128, incx: blasint) -> f64 ---
 
 
-    ssum :: proc(n: blasint, x: [^]f32, incx: blasint) -> f32 ---
-    dsum :: proc(n: blasint, x: [^]f64, incx: blasint) -> f64 ---
-    scsum :: proc(n: blasint, x: [^]complex64, incx: blasint) -> f32 ---
-    dzsum :: proc(n: blasint, x: [^]complex128, incx: blasint) -> f64 ---
-
-
     snrm2 :: proc(N: blasint, X: [^]f32, incX: blasint) -> f32 ---
     dnrm2 :: proc(N: blasint, X: [^]f64, incX: blasint) -> f64 ---
     scnrm2 :: proc(N: blasint, X: [^]complex64, incX: blasint) -> f32 ---
     dznrm2 :: proc(N: blasint, X: [^]complex128, incX: blasint) -> f64 ---
 
 
-    isamax :: proc(n: blasint, x: [^]f32, incx: blasint) -> c.size_t ---
-    idamax :: proc(n: blasint, x: [^]f64, incx: blasint) -> c.size_t ---
-    icamax :: proc(n: blasint, x: [^]complex64, incx: blasint) -> c.size_t ---
-    izamax :: proc(n: blasint, x: [^]complex128, incx: blasint) -> c.size_t ---
-
-
-    isamin :: proc(n: blasint, x: [^]f32, incx: blasint) -> c.size_t ---
-    idamin :: proc(n: blasint, x: [^]f64, incx: blasint) -> c.size_t ---
-    icamin :: proc(n: blasint, x: [^]complex64, incx: blasint) -> c.size_t ---
-    izamin :: proc(n: blasint, x: [^]complex128, incx: blasint) -> c.size_t ---
-
-    samax :: proc(n: blasint, x: [^]f32, incx: blasint) -> f32 ---
-    damax :: proc(n: blasint, x: [^]f64, incx: blasint) -> f64 ---
-    scamax :: proc(n: blasint, x: [^]complex64, incx: blasint) -> f32 ---
-    dzamax :: proc(n: blasint, x: [^]complex128, incx: blasint) -> f64 ---
-
-    samin :: proc(n: blasint, x: [^]f32, incx: blasint) -> f32 ---
-    damin :: proc(n: blasint, x: [^]f64, incx: blasint) -> f64 ---
-    scamin :: proc(n: blasint, x: [^]complex64, incx: blasint) -> f32 ---
-    dzamin :: proc(n: blasint, x: [^]complex128, incx: blasint) -> f64 ---
-
-    ismax :: proc(n: blasint, x: [^]f32, incx: blasint) -> c.size_t ---
-    idmax :: proc(n: blasint, x: [^]f64, incx: blasint) -> c.size_t ---
-    icmax :: proc(n: blasint, x: [^]complex64, incx: blasint) -> c.size_t ---
-    izmax :: proc(n: blasint, x: [^]complex64, incx: blasint) -> c.size_t ---
-
-
-    ismin :: proc(n: blasint, x: [^]f32, incx: blasint) -> c.size_t ---
-    idmin :: proc(n: blasint, x: [^]f64, incx: [^]f64) -> c.size_t ---
-    icmin :: proc(n: blasint, x: [^]complex64, incx: blasint) -> c.size_t ---
-    izmin :: proc(n: blasint, x: [^]complex128, incx: blasint) -> c.size_t ---
-
     saxpy :: proc(n: blasint, alpha: f32, x: [^]f32, incx: blasint, y: [^]f32, incy: blasint) ---
     daxpy :: proc(n: blasint, alpha: f64, x: [^]f64, incx: blasint, y: [^]f64, incy: blasint) ---
     caxpy :: proc(n: blasint, alpha: ^complex64, x: [^]complex64, incx: blasint, y: [^]complex64, incy: blasint) ---
     zaxpy :: proc(n: blasint, alpha: ^complex128, x: [^]complex128, incx: blasint, y: [^]complex128, incy: blasint) ---
-
-
-    caxpyc :: proc(n: blasint, alpha: ^complex64, x: [^]complex64, incx: blasint, y: [^]complex64, incy: blasint) ---
-    zaxpyc :: proc(n: blasint, alpha: ^complex128, x: [^]complex128, incx: blasint, y: [^]complex128, incy: blasint) ---
-
 
     scopy :: proc(n: blasint, x: [^]f32, incx: blasint, y: [^]f32, incy: blasint) ---
     dcopy :: proc(n: blasint, x: [^]f64, incx: blasint, y: [^]f64, incy: blasint) ---
@@ -173,6 +130,7 @@ foreign cblas {
     dtrmm :: proc(order: Order, side: Side, uplo: UpLo, transA: Transpose, diag: Diag, M: blasint, N: blasint, alpha: f64, A: [^]f64, lda: blasint, B: [^]f64, ldb: blasint) ---
     ctrmm :: proc(order: Order, side: Side, uplo: UpLo, transA: Transpose, diag: Diag, M: blasint, N: blasint, alpha: ^complex64, A: [^]complex64, lda: blasint, B: [^]complex64, ldb: blasint) ---
     ztrmm :: proc(order: Order, side: Side, uplo: UpLo, transA: Transpose, diag: Diag, M: blasint, N: blasint, alpha: ^complex128, A: [^]complex128, lda: blasint, B: [^]complex128, ldb: blasint) ---
+
     strsm :: proc(order: Order, side: Side, uplo: UpLo, transA: Transpose, diag: Diag, M: blasint, N: blasint, alpha: f32, A: [^]f32, lda: blasint, B: [^]f32, ldb: blasint) ---
     dtrsm :: proc(order: Order, side: Side, uplo: UpLo, transA: Transpose, diag: Diag, M: blasint, N: blasint, alpha: f64, A: [^]f64, lda: blasint, B: [^]f64, ldb: blasint) ---
     ctrsm :: proc(order: Order, side: Side, uplo: UpLo, transA: Transpose, diag: Diag, M: blasint, N: blasint, alpha: ^complex64, A: [^]complex64, lda: blasint, B: [^]complex64, ldb: blasint) ---
@@ -188,7 +146,12 @@ foreign cblas {
 
     xerbla :: proc(p: blasint, rout: cstring, form: cstring, #c_vararg _: ..any) ---
 
+    cdotc_sub :: proc(n: blasint, x: [^]complex64, incx: blasint, y: [^]complex64, incy: blasint, result: ^complex64) ---
+    cdotu_sub :: proc(n: blasint, x: [^]complex64, incx: blasint, y: [^]complex64, incy: blasint, result: ^complex64) ---
+    zdotc_sub :: proc(n: blasint, x: [^]complex128, incx: blasint, y: [^]complex128, incy: blasint, result: ^complex128) ---
+    zdotu_sub :: proc(n: blasint, x: [^]complex128, incx: blasint, y: [^]complex128, incy: blasint, result: ^complex128) ---
     // BLAS extensions
+    // TODO: some of these exist in other CBLAS implementations, decouple DISABLE_OPENBLAS and CBLAS extensions.
     when !config.DISABLE_OPENBLAS {
         cdotu :: proc(n: blasint, x: [^]complex64, incx: blasint, y: [^]complex64, incy: blasint) -> complex64 ---
         cdotc :: proc(n: blasint, x: [^]complex64, incx: blasint, y: [^]complex64, incy: blasint) -> complex64 ---
@@ -205,17 +168,50 @@ foreign cblas {
         comatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: ^complex64, a: [^]complex64, lda: blasint, b: [^]complex64, ldb: blasint) ---
         zomatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: ^complex128, a: [^]complex128, lda: blasint, b: [^]complex128, ldb: blasint) ---
 
-
         simatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: f32, a: [^]f32, lda: blasint, rda: blasint) ---
         dimatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: f64, a: [^]f64, lda: blasint, rda: blasint) ---
         cimatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: ^complex64, a: [^]complex64, lda: blasint, ldb: blasint) ---
         zimatcopy :: proc(order: Order, trans: Transpose, rows: blasint, cols: blasint, alpha: ^complex128, a: [^]complex128, lda: blasint, ldb: blasint) ---
-    } else {
-        cdotc_sub :: proc(n: blasint, x: [^]complex64, incx: blasint, y: [^]complex64, incy: blasint, result: ^complex64) ---
 
-        cdotu_sub :: proc(n: blasint, x: [^]complex64, incx: blasint, y: [^]complex64, incy: blasint, result: ^complex64) ---
-        zdotc_sub :: proc(n: blasint, x: [^]complex128, incx: blasint, y: [^]complex128, incy: blasint, result: ^complex128) ---
-        zdotu_sub :: proc(n: blasint, x: [^]complex128, incx: blasint, y: [^]complex128, incy: blasint, result: ^complex128) ---
+        ssum :: proc(n: blasint, x: [^]f32, incx: blasint) -> f32 ---
+        dsum :: proc(n: blasint, x: [^]f64, incx: blasint) -> f64 ---
+        scsum :: proc(n: blasint, x: [^]complex64, incx: blasint) -> f32 ---
+        dzsum :: proc(n: blasint, x: [^]complex128, incx: blasint) -> f64 ---
+
+
+        isamax :: proc(n: blasint, x: [^]f32, incx: blasint) -> c.size_t ---
+        idamax :: proc(n: blasint, x: [^]f64, incx: blasint) -> c.size_t ---
+        icamax :: proc(n: blasint, x: [^]complex64, incx: blasint) -> c.size_t ---
+        izamax :: proc(n: blasint, x: [^]complex128, incx: blasint) -> c.size_t ---
+
+
+        isamin :: proc(n: blasint, x: [^]f32, incx: blasint) -> c.size_t ---
+        idamin :: proc(n: blasint, x: [^]f64, incx: blasint) -> c.size_t ---
+        icamin :: proc(n: blasint, x: [^]complex64, incx: blasint) -> c.size_t ---
+        izamin :: proc(n: blasint, x: [^]complex128, incx: blasint) -> c.size_t ---
+
+        samax :: proc(n: blasint, x: [^]f32, incx: blasint) -> f32 ---
+        damax :: proc(n: blasint, x: [^]f64, incx: blasint) -> f64 ---
+        scamax :: proc(n: blasint, x: [^]complex64, incx: blasint) -> f32 ---
+        dzamax :: proc(n: blasint, x: [^]complex128, incx: blasint) -> f64 ---
+
+        samin :: proc(n: blasint, x: [^]f32, incx: blasint) -> f32 ---
+        damin :: proc(n: blasint, x: [^]f64, incx: blasint) -> f64 ---
+        scamin :: proc(n: blasint, x: [^]complex64, incx: blasint) -> f32 ---
+        dzamin :: proc(n: blasint, x: [^]complex128, incx: blasint) -> f64 ---
+
+        ismax :: proc(n: blasint, x: [^]f32, incx: blasint) -> c.size_t ---
+        idmax :: proc(n: blasint, x: [^]f64, incx: blasint) -> c.size_t ---
+        icmax :: proc(n: blasint, x: [^]complex64, incx: blasint) -> c.size_t ---
+        izmax :: proc(n: blasint, x: [^]complex64, incx: blasint) -> c.size_t ---
+
+        ismin :: proc(n: blasint, x: [^]f32, incx: blasint) -> c.size_t ---
+        idmin :: proc(n: blasint, x: [^]f64, incx: [^]f64) -> c.size_t ---
+        icmin :: proc(n: blasint, x: [^]complex64, incx: blasint) -> c.size_t ---
+        izmin :: proc(n: blasint, x: [^]complex128, incx: blasint) -> c.size_t ---
+
+        caxpyc :: proc(n: blasint, alpha: ^complex64, x: [^]complex64, incx: blasint, y: [^]complex64, incy: blasint) ---
+        zaxpyc :: proc(n: blasint, alpha: ^complex128, x: [^]complex128, incx: blasint, y: [^]complex128, incy: blasint) ---
     }
     // not in every CBLAS: OpenBLAS, AOCL-BLAS and MKL have it, Netlib does not
     when config.BLAS_HAS_GEMM_BATCH {
