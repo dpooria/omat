@@ -212,3 +212,13 @@ fft_plans_from_threads :: proc(t: ^testing.T) {
     }
 }
 
+
+@(test)
+fftfreq_int :: proc(t: ^testing.T) {
+    even := om.fftfreq_int(6)
+    defer om.tensor_destroy(&even)
+    expect_close(t, even.data, []int{0, 1, 2, -3, -2, -1}, 0)
+    odd := om.fftfreq_int(5)
+    defer om.tensor_destroy(&odd)
+    expect_close(t, odd.data, []int{0, 1, 2, -2, -1}, 0)
+}

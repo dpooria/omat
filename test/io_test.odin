@@ -4,6 +4,7 @@ import "core:os"
 import "core:testing"
 
 import om ".."
+import "../config"
 
 @(test)
 npy_header_helpers_read_simple_headers :: proc(t: ^testing.T) {
@@ -56,5 +57,22 @@ npy_file_round_trip :: proc(t: ^testing.T) {
 
     // A tiny print call also exercises the display helper.
     om.print(tensor)
+}
+
+@(test)
+save_load :: proc(t: ^testing.T) {
+    // save any view, load it back contiguous
+    A := om.randn(f64, [2]int{3, 5})
+    defer om.tensor_destroy(&A)
+    // TODO: better temporary path
+    path := "/tmp/view.npy"
+    v := om.transpose_view(om.view(A, {0, 1}, {3, 4}))
+    testing.expect_value(t, om.save(v, path), nil)
+    back: om.Tensor(f64, 2)
+    testing.expect(t, om.load(&back, path))
+    defer om.tensor_destroy(&back)
+    testing.expect_value(t, back.shape, [2]int{3, 3})
+    testing.expect_value(t, back.strides, [2]int{3, 1})
+    testing.expect(t, om.allclose(back, v, 0, 0))
 }
 

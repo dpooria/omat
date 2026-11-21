@@ -122,3 +122,47 @@ ireshape :: proc(t: Tensor($T, $N), shape: [$M]int) -> Tensor(T, M) {
     }
 }
 
+@(private = "file")
+grid_offset :: #force_inline proc(grid: Tensor($T, $N), flat: int, contiguous: bool) -> int {
+    if contiguous {
+        return flat
+    }
+    return offset_of_index(unravel_index(flat, grid.shape), grid.strides)
+}
+
+// dst[i] = src[index[i]]
+gather_into :: proc(dst: Tensor($T, 1), src: Tensor(T, $N), index: []int) {
+    assert(dst.shape[0] == len(index), "gather: one index per dst")
+    contiguous := is_contiguous(src)
+    step := dst.strides[0]
+    for flat, g in index {
+        dst.data[g * step] = src.data[grid_offset(src, flat, contiguous)]
+    }
+}
+
+@(require_results)
+gather :: proc(src: Tensor($T, $N), index: []int, allocator := context.allocator) -> Tensor(T, 1) {
+    res := zeros(T, [1]int{len(index)}, allocator)
+    gather_into(res, src, index)
+    return res
+}
+
+// dst[index[g]] = src[g], other elements untouched (zero the dst first for a fresh transform)
+scatter :: proc(dst: ^Tensor($T, $N), src: Tensor(T, 1), index: []int) {
+    assert(src.shape[0] == len(index), "scatter: one index per src")
+    contiguous := is_contiguous(dst^)
+    step := src.strides[0]
+    for flat, g in index {
+        dst.data[grid_offset(dst^, flat, contiguous)] = src.data[g * step]
+    }
+}
+
+// dst[index[g]] += src[g]; repeated indices accumulate
+scatter_add :: proc(dst: ^Tensor($T, $N), src: Tensor(T, 1), index: []int) {
+    assert(src.shape[0] == len(index), "scatter_add: one index per src")
+    contiguous := is_contiguous(dst^)
+    step := src.strides[0]
+    for flat, g in index {
+        dst.data[grid_offset(dst^, flat, contiguous)] += src.data[g * step]
+    }
+}

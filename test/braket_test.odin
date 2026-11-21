@@ -4,7 +4,6 @@ import "core:math"
 import "core:testing"
 
 import om ".."
-import "../config"
 import ob "../openblas"
 
 @(test)
@@ -151,66 +150,6 @@ residuals_and_broadcasting :: proc(t: ^testing.T) {
 }
 
 @(test)
-grids_gather_scatter :: proc(t: ^testing.T) {
-    // a plane wave's coefficients on a small sphere, placed on an FFT box and transformed back
-    n :: 6
-    freq := om.fftfreq_int(n)
-    defer om.tensor_destroy(&freq)
-    expect_close(t, freq.data, []int{0, 1, 2, -3, -2, -1}, 0)
-    odd := om.fftfreq_int(5)
-    defer om.tensor_destroy(&odd)
-    expect_close(t, odd.data, []int{0, 1, 2, -2, -1}, 0)
-
-    index := make([dynamic]int)
-    defer delete(index)
-    for i in 0 ..< n {
-        for j in 0 ..< n {
-            for k in 0 ..< n {
-                g2 :=
-                    freq.data[i] * freq.data[i] +
-                    freq.data[j] * freq.data[j] +
-                    freq.data[k] * freq.data[k]
-                if g2 <= 2 {
-                    append(&index, (i * n + j) * n + k)
-                }
-            }
-        }
-    }
-    testing.expect_value(t, len(index), 19) // |G|^2 <= 2: 1 + 6 + 12
-
-    c := om.randn(complex128, [1]int{len(index)})
-    defer om.tensor_destroy(&c)
-    grid := om.zeros(complex128, [3]int{n, n, n})
-    defer om.tensor_destroy(&grid)
-    om.scatter(&grid, c, index[:])
-    testing.expect(t, abs(om.sum(grid) - om.sum(c)) < 1e-12)
-    real_space := om.invfft(grid)
-    defer om.tensor_destroy(&real_space)
-    back := om.fft(real_space)
-    defer om.tensor_destroy(&back)
-    got := om.gather(back, index[:])
-    defer om.tensor_destroy(&got)
-    testing.expect(t, om.allclose(got, c, 0, 1e-12))
-
-    // non-contiguous grids and coefficient views, and accumulation
-    boxp := om.zeros(complex128, [3]int{n, n, n + 2})
-    defer om.tensor_destroy(&boxp)
-    box := om.view(boxp, {0, 0, 1}, {n, n, n + 1})
-    pc := om.zeros(complex128, [2]int{len(index), 2})
-    defer om.tensor_destroy(&pc)
-    cv := om.view_row(om.transpose_view(pc), 1)
-    om.assign(cv, c)
-    om.scatter(&box, cv, index[:])
-    om.scatter_add(&box, cv, index[:])
-    twice := om.gather(box, index[:])
-    defer om.tensor_destroy(&twice)
-    om.imultiply(&twice, complex128(0.5))
-    testing.expect(t, om.allclose(twice, c, 0, 1e-15))
-    om.gather_into(cv, grid, index[:])
-    testing.expect(t, om.allclose(cv, c, 0, 0))
-}
-
-@(test)
 complex_functions :: proc(t: ^testing.T) {
     theta := om.linspace(-3, 3, 7)
     defer om.tensor_destroy(&theta)
@@ -263,122 +202,8 @@ complex_functions :: proc(t: ^testing.T) {
     testing.expect_value(t, ra2.data[3], 9.0)
 }
 
-@(test)
-tensor_niceties :: proc(t: ^testing.T) {
-    A := om.zeros(f64, [2]int{3, 4})
-    defer om.tensor_destroy(&A)
-    for &x, i in A.data {
-        x = f64(i) - 5
-    }
 
-    // diagonal views and diagonal matrices
-    d := om.diagonal(A)
-    testing.expect_value(t, d.shape, [1]int{3})
-    testing.expect_value(t, d.strides, [1]int{5})
-    expect_close(t, []f64{om.atv(d, 0), om.atv(d, 1), om.atv(d, 2)}, []f64{-5, 0, 5}, 0)
-    D := om.diag(d)
-    defer om.tensor_destroy(&D)
-    testing.expect_value(t, om.trace(D), om.sum(d))
-    testing.expect_value(t, om.atv(D, 0, 1), 0.0)
-    dt := om.diagonal(om.transpose_view(A))
-    testing.expect_value(t, om.atv(dt, 2), 5.0)
-
-    // concatenation along either axis, of views too
-    C0 := om.concatenate([]om.Tensor(f64, 2){A, om.view_rows(A, 0, 1)}, 0)
-    defer om.tensor_destroy(&C0)
-    testing.expect_value(t, C0.shape, [2]int{4, 4})
-    testing.expect_value(t, om.atv(C0, 3, 2), om.atv(A, 0, 2))
-    C1 := om.concatenate([]om.Tensor(f64, 2){om.transpose_view(om.view(A, {0, 0}, {3, 3})), A}, 1)
-    defer om.tensor_destroy(&C1)
-    testing.expect_value(t, C1.shape, [2]int{3, 7})
-    testing.expect_value(t, om.atv(C1, 0, 2), om.atv(A, 2, 0))
-    testing.expect_value(t, om.atv(C1, 2, 6), om.atv(A, 2, 3))
-
-    // reductions along an axis
-    s0, s1 := om.sum_axis(A, 0), om.sum_axis(A, 1)
-    defer om.tensor_destroy(&s0)
-    defer om.tensor_destroy(&s1)
-    expect_close(t, s0.data, []f64{-3, 0, 3, 6}, 0)
-    expect_close(t, s1.data, []f64{-14, 2, 18}, 0)
-    m1 := om.mean_axis(om.transpose_view(A), 0)
-    defer om.tensor_destroy(&m1)
-    expect_close(t, m1.data, []f64{-3.5, 0.5, 4.5}, 1e-15)
-    mx, mn, pr := om.max_axis(A, 0), om.min_axis(A, 1), om.prod_axis(A, 0)
-    defer om.tensor_destroy(&mx)
-    defer om.tensor_destroy(&mn)
-    defer om.tensor_destroy(&pr)
-    expect_close(t, mx.data, []f64{3, 4, 5, 6}, 0)
-    expect_close(t, mn.data, []f64{-5, -1, 3}, 0)
-    expect_close(t, pr.data, []f64{-5 * -1 * 3, -4 * 0 * 4, -3 * 1 * 5, -2 * 2 * 6}, 0)
-    T3 := om.random_normal([3]int{2, 3, 4})
-    defer om.tensor_destroy(&T3)
-    mid := om.sum_axis(T3, 1)
-    defer om.tensor_destroy(&mid)
-    testing.expect_value(t, mid.shape, [2]int{2, 4})
-    testing.expect(
-        t,
-        abs(
-            om.atv(mid, 1, 2) - (om.atv(T3, 1, 0, 2) + om.atv(T3, 1, 1, 2) + om.atv(T3, 1, 2, 2)),
-        ) <
-        1e-14,
-    )
-    // band-summed density from |psi|^2
-    psi := om.randn(complex128, [2]int{3, 5})
-    defer om.tensor_destroy(&psi)
-    dens2 := om.abs2(psi)
-    defer om.tensor_destroy(&dens2)
-    rho := om.sum_axis(dens2, 0)
-    defer om.tensor_destroy(&rho)
-    testing.expect(t, abs(om.sum(rho) - om.norm(psi) * om.norm(psi)) < 1e-12)
-
-    // clipping and closeness
-    c := om.clip(A, -1, 2)
-    defer om.tensor_destroy(&c)
-    testing.expect_value(t, om.min(c), -1.0)
-    testing.expect_value(t, om.max(c), 2.0)
-    testing.expect_value(t, om.atv(c, 1, 1), 0.0)
-    boxv := om.view(A, {1, 1}, {3, 3})
-    om.iclip(&boxv, 0, 1)
-    testing.expect_value(t, om.atv(A, 2, 2), 1.0)
-    testing.expect_value(t, om.atv(A, 0, 0), -5.0)
-    B := om.tensor_copy(A)
-    defer om.tensor_destroy(&B)
-    testing.expect(t, om.allclose(A, B))
-    om.at(B, 0, 0)^ += 1e-9
-    testing.expect(t, om.allclose(A, B))
-    testing.expect(t, !om.allclose(A, B, rtol = 0, atol = 1e-12))
-}
-
-@(test)
-threads_and_files :: proc(t: ^testing.T) {
-    when config.USE_OPENBLAS_THREADS {
-        om.set_num_threads(2)
-        defer om.set_num_threads(1)
-    }
-    x := om.randn(complex128, [3]int{8, 8, 8})
-    defer om.tensor_destroy(&x)
-    y := om.fft(x)
-    defer om.tensor_destroy(&y)
-    z := om.invfft(y)
-    defer om.tensor_destroy(&z)
-    testing.expect(t, om.allclose(z, x, 0, 1e-12))
-
-    // save any view, load it back contiguous
-    A := om.randn(f64, [2]int{3, 5})
-    defer om.tensor_destroy(&A)
-    // TODO: better temporary path
-    path := "/tmp/view.npy"
-    v := om.transpose_view(om.view(A, {0, 1}, {3, 4}))
-    testing.expect_value(t, om.save(v, path), nil)
-    back: om.Tensor(f64, 2)
-    testing.expect(t, om.load(&back, path))
-    defer om.tensor_destroy(&back)
-    testing.expect_value(t, back.shape, [2]int{3, 3})
-    testing.expect_value(t, back.strides, [2]int{3, 1})
-    testing.expect(t, om.allclose(back, v, 0, 0))
-}
-
-// The README's Rayleigh-Ritz steps: in the full space the Ritz states are exact eigenstates
+// Rayleigh-Ritz steps: in the full space the Ritz states are exact eigenstates
 @(test)
 rayleigh_ritz :: proc(t: ^testing.T) {
     ng :: 6

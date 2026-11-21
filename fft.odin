@@ -2,14 +2,15 @@ package omat
 
 import "base:intrinsics"
 import "core:c"
-import "core:log"
 import "core:math"
 import "core:mem"
 import "core:sync"
 
-import "config"
 import "fftw"
-import ob "openblas"
+
+// FFTW's planner is not thread-safe, only execution is: planning, destroying plans and thread
+// settings go through this lock, so fft_plan may be called from any thread
+fft_planner_lock: sync.Mutex
 
 FFTOption :: enum u8 {
     Inverse, // backward transform (complex -> complex; complex -> real)
@@ -49,10 +50,6 @@ FFTPlan :: struct($A, $B: typeid, $N: int) {
     options:   FFTOptions,
     scale:     f64,
 }
-
-// FFTW's planner is not thread-safe, only execution is: planning, destroying plans and thread
-// settings go through this lock, so fft_plan may be called from any thread
-fft_planner_lock: sync.Mutex
 
 fft_rigor_flags := [FFTRigor]fftw.Flags {
     .Estimate   = fftw.ESTIMATE,
@@ -308,94 +305,5 @@ fftfreq_int :: proc(n: int, allocator := context.allocator) -> Tensor(int, 1) {
         t.data[i] = i if i < (n + 1) / 2 else i - n
     }
     return t
-}
-
-// -- plane waves on FFT grids --
-//
-// A wave function is stored as its coefficients on the G-vectors of a cutoff sphere, and a grid
-// holds it on the full FFT box; index[g] is the flat row-major position of G-vector g in the box.
-
-@(private = "file")
-grid_offset :: #force_inline proc(grid: Tensor($T, $N), flat: int, contiguous: bool) -> int {
-    if contiguous {
-        return flat
-    }
-    return offset_of_index(unravel_index(flat, grid.shape), grid.strides)
-}
-
-// coefficients[g] = grid[index[g]]
-gather_into :: proc(coefficients: Tensor($T, 1), grid: Tensor(T, $N), index: []int) {
-    assert(coefficients.shape[0] == len(index), "gather: one index per coefficient")
-    contiguous := is_contiguous(grid)
-    step := coefficients.strides[0]
-    for flat, g in index {
-        coefficients.data[g * step] = grid.data[grid_offset(grid, flat, contiguous)]
-    }
-}
-
-@(require_results)
-gather :: proc(
-    grid: Tensor($T, $N),
-    index: []int,
-    allocator := context.allocator,
-) -> Tensor(T, 1) {
-    res := zeros(T, [1]int{len(index)}, allocator)
-    gather_into(res, grid, index)
-    return res
-}
-
-// grid[index[g]] = coefficients[g], other grid points untouched (zero the grid first for a
-// fresh transform)
-scatter :: proc(grid: ^Tensor($T, $N), coefficients: Tensor(T, 1), index: []int) {
-    assert(coefficients.shape[0] == len(index), "scatter: one index per coefficient")
-    contiguous := is_contiguous(grid^)
-    step := coefficients.strides[0]
-    for flat, g in index {
-        grid.data[grid_offset(grid^, flat, contiguous)] = coefficients.data[g * step]
-    }
-}
-
-// grid[index[g]] += coefficients[g]; repeated indices accumulate
-scatter_add :: proc(grid: ^Tensor($T, $N), coefficients: Tensor(T, 1), index: []int) {
-    assert(coefficients.shape[0] == len(index), "scatter_add: one index per coefficient")
-    contiguous := is_contiguous(grid^)
-    step := coefficients.strides[0]
-    for flat, g in index {
-        grid.data[grid_offset(grid^, flat, contiguous)] += coefficients.data[g * step]
-    }
-}
-
-// Threads for OpenBLAS and for FFTW plans made afterwards
-set_num_threads :: proc(n: int) {
-
-    when !config.USE_OPENBLAS_THREADS && !config.USE_FFTW_THREADS {
-        assert(n == 1, "omat is compiled with threads disabled!")
-    }
-    when config.USE_FFTW_THREADS {
-        sync.mutex_lock(&fft_planner_lock)
-        defer sync.mutex_unlock(&fft_planner_lock)
-        @(static) fftw_threads_ready: bool
-        if !fftw_threads_ready {
-            fftw.init_threads()
-            fftw.f_init_threads()
-            fftw_threads_ready = true
-        }
-        fftw.plan_with_nthreads(c.int(n))
-        fftw.f_plan_with_nthreads(c.int(n))
-    }
-
-    when !config.DISABLE_OPENBLAS {
-        when config.USE_OPENBLAS_THREADS {
-            if n > 1 && ob.openblas_get_parallel() == ob.SEQUENTIAL {
-                log.warn(
-                    "omat: linked OpenBLAS is sequential. " +
-                    "Set -define:OMAT_OPENBLAS to a threaded build to use more than one thread.",
-                )
-            }
-            ob.openblas_set_num_threads(c.int(n))
-        } else {
-            ob.openblas_set_num_threads(1)
-        }
-    }
 }
 
