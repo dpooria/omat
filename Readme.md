@@ -74,7 +74,7 @@ iorthonormalize, ...) work directly on blocks of larger matrices, taking the lea
 from the strides.
 
 ## Requirements
-The default build requires Odin and:
+The default build requires Odin `dev-2026-10` or later, plus:
 - OpenBLAS (`openblas`) with CBLAS and LAPACKE support, using 32-bit BLAS integers (LP64).
 - The PocketFFT submodule and a C++ compiler to build its wrapper.
 

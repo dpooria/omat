@@ -134,8 +134,8 @@ helpers_print_views :: proc(t: ^testing.T) {
     for &x, i in A.data {
         x = i32(i)
     }
-    // TODO: better temporary path
-    path := "/tmp/print_view.txt"
+    path := #directory + "/print_view.txt"
+    defer os.remove(path)
     f, err := os.open(path, {.Write, .Create, .Trunc})
     testing.expect_value(t, err, nil)
     om.print(om.transpose_view(om.view(A, {1, 1}, {3, 3})), "%v", f)

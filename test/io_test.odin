@@ -35,8 +35,7 @@ npy_descriptor_matches_basic_numeric_types :: proc(t: ^testing.T) {
 
 @(test)
 npy_file_round_trip :: proc(t: ^testing.T) {
-    // TODO: better temporary path
-    path := "/tmp/omat_test_round_trip.npy"
+    path := #directory + "/omat_test_round_trip.npy"
     defer os.remove(path)
 
     original := []f64{1.25, 2.5, 3.75, 5.0}
@@ -64,8 +63,8 @@ save_load :: proc(t: ^testing.T) {
     // save any view, load it back contiguous
     A := om.randn(f64, [2]int{3, 5})
     defer om.tensor_destroy(&A)
-    // TODO: better temporary path
-    path := "/tmp/view.npy"
+    path := #directory + "/view.npy"
+    defer os.remove(path)
     v := om.transpose_view(om.view(A, {0, 1}, {3, 4}))
     testing.expect_value(t, om.save(v, path), nil)
     back: om.Tensor(f64, 2)
