@@ -86,11 +86,11 @@ fft_real_roundtrip :: proc(t: ^testing.T) {
     testing.expect_value(t, y.shape, [3]int{4, 6, 6})
     testing.expect(t, abs(real(y.data[0]) - sum) < 1e-10) // DC term
 
-    z := om.invrfft(y)
+    z := om.fft(f64, y, {.Inverse})
     defer om.tensor_destroy(&z)
     testing.expect_value(t, z.shape, x.shape)
     testing.expect(t, om.allclose(z, x, rtol = 0, atol = 1e-12))
-    testing.expect(t, abs(real(y.data[0]) - sum) < 1e-10) // invrfft left its input alone
+    testing.expect(t, abs(real(y.data[0]) - sum) < 1e-10) // inverse left its input alone
 
     // odd length needs n
     w := om.zeros(f32, [1]int{7})
@@ -100,7 +100,7 @@ fft_real_roundtrip :: proc(t: ^testing.T) {
     }
     wf := om.fft(w)
     defer om.tensor_destroy(&wf)
-    wb := om.invrfft(wf, n = 7)
+    wb := om.fft(f32, wf, {.Inverse}, n = 7)
     defer om.tensor_destroy(&wb)
     testing.expect(t, om.allclose(wb, w, rtol = 0, atol = 1e-5))
 }
@@ -221,4 +221,90 @@ fftfreq_int :: proc(t: ^testing.T) {
     odd := om.fftfreq_int(5)
     defer om.tensor_destroy(&odd)
     expect_close(t, odd.data, []int{0, 1, 2, -2, -1}, 0)
+}
+
+@(test)
+fft_into_strided :: proc(t: ^testing.T) {
+    x := om.random_complex(complex128, [2]int{4, 6})
+    defer om.tensor_destroy(&x)
+    layouts := make_layouts(x)
+    defer destroy_layouts(&layouts)
+    parent := om.zeros(complex128, [2]int{8, 6})
+    defer om.tensor_destroy(&parent)
+    om.fill(&parent, 99)
+    output := om.transpose_view(om.view(parent, {1, 1}, {7, 5}))
+    want := om.fft(x, norm = .Ortho)
+    defer om.tensor_destroy(&want)
+
+    p := om.fft_plan(layouts.boxed, output, norm = .Ortho, rigor = .Measure)
+    defer om.fft_destroy(&p)
+    om.assign(layouts.boxed, x) // measured planning may overwrite input
+    for _ in 0 ..< 2 {
+        om.fft_execute(p, layouts.boxed, output)
+        testing.expect(t, om.allclose(output, want, rtol = 0, atol = 1e-12))
+    }
+    om.fft_into(layouts.transposed, output, norm = .Ortho)
+    testing.expect(t, om.allclose(output, want, rtol = 0, atol = 1e-12))
+    testing.expect_value(t, om.atv(parent, 0, 0), complex128(99))
+    testing.expect_value(t, om.atv(parent, 7, 5), complex128(99))
+    testing.expect(t, om.allclose(layouts.boxed, x, rtol = 0, atol = 0))
+}
+
+@(test)
+fft_plan_from_kind :: proc(t: ^testing.T) {
+    x := om.zeros(f32, [2]int{3, 7})
+    defer om.tensor_destroy(&x)
+    for &v, i in x.data { v = f32(i) / 7 }
+    y := om.zeros(complex64, [2]int{3, 4})
+    z := om.zeros(f32, x.shape)
+    defer om.tensor_destroy(&y)
+    defer om.tensor_destroy(&z)
+    fwd := om.fft_plan(f32, .R2C, x.shape, {.Batched})
+    inv := om.fft_plan(f32, .C2R, x.shape, {.Batched})
+    defer om.fft_destroy(&fwd)
+    defer om.fft_destroy(&inv)
+    om.fft_execute(fwd, x, y)
+    om.fft_execute(inv, y, z)
+    testing.expect(t, om.allclose(z, x, rtol = 0, atol = 1e-5))
+
+    c := om.random_complex(complex128, [1]int{7})
+    defer om.tensor_destroy(&c)
+    want := om.fft(c)
+    defer om.tensor_destroy(&want)
+    p := om.fft_plan(f64, .C2C, c.shape, {.In_Place})
+    defer om.fft_destroy(&p)
+    om.fft_execute(p, c, c)
+    testing.expect(t, om.allclose(c, want, rtol = 0, atol = 1e-12))
+}
+
+@(test)
+fft_into_real_batched_views :: proc(t: ^testing.T) {
+    parent := om.zeros(f64, [2]int{5, 11})
+    defer om.tensor_destroy(&parent)
+    x := om.view(parent, {1, 2}, {4, 9})
+    for i in 0 ..< 3 {
+        for j in 0 ..< 7 { x.data[i * x.strides[0] + j * x.strides[1]] = f64(7 * i + j) }
+    }
+    spectrum_parent := om.zeros(complex128, [2]int{6, 5})
+    defer om.tensor_destroy(&spectrum_parent)
+    y := om.transpose_view(om.view(spectrum_parent, {1, 1}, {5, 4}))
+    real_parent := om.zeros(f64, parent.shape)
+    defer om.tensor_destroy(&real_parent)
+    z := om.view(real_parent, {1, 2}, {4, 9})
+    om.fft_into(x, y, {.Batched})
+    om.fft_into(y, z, {.Inverse, .Batched})
+    testing.expect(t, om.allclose(z, x, rtol = 0, atol = 1e-12))
+    testing.expect_value(t, om.atv(real_parent, 0, 0), 0.0)
+}
+
+@(test)
+fft_into_in_place_view :: proc(t: ^testing.T) {
+    parent := om.random_complex(complex64, [2]int{7, 3})
+    defer om.tensor_destroy(&parent)
+    x := om.view_axis(parent, 1, 1)
+    original := om.tensor_copy(x)
+    defer om.tensor_destroy(&original)
+    om.fft_into(x, x)
+    om.fft_into(x, x, {.Inverse})
+    testing.expect(t, om.allclose(x, original, rtol = 0, atol = 1e-5))
 }

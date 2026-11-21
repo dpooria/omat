@@ -3,7 +3,7 @@ import "core:testing"
 
 import om ".."
 import "../config"
-import "../fftw"
+import "../fft_backend/fftw"
 import ob "../openblas"
 
 @(test)
@@ -33,7 +33,7 @@ set_num_threads_backends :: proc(t: ^testing.T) {
 
 @(test)
 set_num_threads_rejects_multiple_threads :: proc(t: ^testing.T) {
-    when !config.USE_FFTW_THREADS && !config.USE_OPENBLAS_THREADS {
+    when !config.USE_FFTW_THREADS && !config.USE_OPENBLAS_THREADS && (config.USE_FFTW || config.POCKETFFT_NO_MULTITHREADING) {
         testing.expect_assert_message(t, "omat is compiled with threads disabled!")
         om.set_num_threads(2)
         testing.expect(t, false, "expected set_num_threads(2) to assert")

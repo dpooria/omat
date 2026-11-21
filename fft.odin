@@ -1,24 +1,53 @@
 package omat
 
 import "base:intrinsics"
-import "core:c"
 import "core:math"
-import "core:mem"
-import "core:sync"
 
-import "fftw"
+import "fft_backend"
 
-// FFTW's planner is not thread-safe, only execution is: planning, destroying plans and thread
-// settings go through this lock, so fft_plan may be called from any thread
-fft_planner_lock: sync.Mutex
 
-FFTOption :: enum u8 {
-    Inverse, // backward transform (complex -> complex; complex -> real)
-    Batched, // the first axis indexes independent transforms of the others
-    In_Place, // input and output are the same tensor (complex -> complex only)
-    Unaligned, // tensors may not be 16-byte aligned (views into other data)
-}
-FFTOptions :: bit_set[FFTOption;u8]
+// FFT example
+// ```odin
+// spectrum := om.fft(signal)                        // real input gives a half spectrum
+// restored := om.fft(f64, spectrum, {.Inverse}, n = n) // n is needed for odd real lengths
+// om.fft_into(input, output, {.Batched})             // write into an existing tensor
+//
+// p := om.fft_plan(complex128, complex128, shape)    // from element types
+// q := om.fft_plan(f64, .R2C, shape)                 // from real precision and kind
+// r := om.fft_plan(input, output, {.Batched})        // from tensor shapes and strides
+// om.fft_execute(r, input, output)
+// om.fft_destroy(&p)
+// om.fft_destroy(&q)
+// om.fft_destroy(&r)
+// ```
+//
+// Shapes passed to the type and kind constructors are the full realspace shapes.
+// Plans reuse the same element types, shapes, strides and in-place layout; `.Unaligned`
+// allows reuse with unaligned buffers. Buffer constructors infer alignment and in-place
+// execution. `.Batched` transforms all axes after the first; `.Inverse` reverses a complex
+// transform. Real/complex element types select R2C or C2R automatically. `norm` is
+// `.Backward` by default, with `.Forward` and `.Ortho` also available.
+//
+// `fft` preserves its input. `fft_into` and `fft_execute` may overwrite complex input
+// when producing real output. Their output shape determines even or odd real lengths.
+// With FFTW, type or kind constructors plan on scratch buffers. Buffer constructors use
+// existing storage: the default `rigor = .Estimate` preserves it during planning, while
+// `.Measure`, `.Patient` and `.Exhaustive` may overwrite it. PocketFFT accepts rigor for
+// portability and uses its own cached algorithms (ignores it).
+// Backend workspace may still be allocated internally.
+
+// PocketFFT is the default backend; no FFT backend flag is needed after building its
+// wrapper. `set_num_threads` applies to future plans on either backend.
+// Both build scripts accept extra compiler flags. For a wrapper without threading, use
+// `fft_backend/pocketfft/build.sh -DPOCKETFFT_NO_MULTITHREADING` on Linux, or
+// `.\fft_backend\pocketfft\build.ps1 /DPOCKETFFT_NO_MULTITHREADING` on Windows.
+// Also compile omat with `-define:OMAT_POCKETFFT_NO_MULTITHREADING=true` so it knows
+// the wrapper has no threading support. Threading is enabled by default.
+
+FFTKind :: fft_backend.Kind
+FFTOption :: fft_backend.Option
+FFTOptions :: fft_backend.Options
+FFTRigor :: fft_backend.Rigor
 
 // Backward scales the inverse by 1/n, Forward the forward, Ortho both by 1/sqrt(n).
 FFTNorm :: enum u8 {
@@ -27,198 +56,253 @@ FFTNorm :: enum u8 {
     Forward,
 }
 
-// How long FFTW searches for the fastest algorithm;
-FFTRigor :: enum u8 {
-    Estimate,
-    Measure,
-    Patient,
-    Exhaustive,
+FFTPlan :: struct($N: int) {
+    using backend:           fft_backend.Plan(N),
+    in_shape, out_shape:     [N]int,
+    in_strides, out_strides: [N]int,
+    scale:                   f64,
 }
 
-// complex -> complex, real -> complex, complex -> real.
-FFTKind :: enum u8 {
-    C2C,
-    R2C,
-    C2R,
-}
-
-// Reusable transform from Tensor(A, N) to Tensor(B, N).
-FFTPlan :: struct($A, $B: typeid, $N: int) {
-    handle:    (fftw.plan when A == complex128 || B == complex128 else fftw.f_plan),
-    in_shape:  [N]int,
-    out_shape: [N]int,
-    options:   FFTOptions,
-    scale:     f64,
-}
-
-fft_rigor_flags := [FFTRigor]fftw.Flags {
-    .Estimate   = fftw.ESTIMATE,
-    .Measure    = fftw.MEASURE,
-    .Patient    = fftw.PATIENT,
-    .Exhaustive = fftw.EXHAUSTIVE,
-}
-
-// scale = n^-power, for [forward, inverse]
-fft_norm_power := [FFTNorm][2]f64 {
-    .Backward = {0, 1},
-    .Ortho    = {0.5, 0.5},
-    .Forward  = {1, 0},
-}
-
-// Plan for Tensor(A, N) -> Tensor(B, N), where shape is the full (real-space) shape; the
-// complex side of a real transform has shape [..., n/2+1]. The input is destroyed in case of complex -> real
-// Planning uses scratch memory, so any rigor is safe.
+// Full real-space shape; the complex side of R2C/C2R has last length n/2+1.
+// Type-based plans use contiguous scratch buffers, so planning never changes user data.
 @(require_results)
-fft_plan :: proc(
+fft_plan_types :: proc(
     $A, $B: typeid,
     shape: [$N]int,
     options := FFTOptions{},
     norm := FFTNorm.Backward,
     rigor := FFTRigor.Estimate,
-) -> FFTPlan(A, B, N) where (intrinsics.type_is_complex(A) && B == A) ||
-    (A == f64 && B == complex128) ||
-    (A == f32 && B == complex64) ||
-    (A == complex128 && B == f64) ||
-    (A == complex64 && B == f32) {
-
-    KIND ::
-        FFTKind.C2C when intrinsics.type_is_complex(A) &&
-        intrinsics.type_is_complex(B) else (FFTKind.R2C when intrinsics.type_is_complex(
-                B,
-            ) else FFTKind.C2R)
-    in_place := .In_Place in options
-    inverse := KIND == .C2R || (KIND == .C2C && .Inverse in options)
-    assert(KIND == .C2C || !in_place, "fft_plan: only complex -> complex runs in place")
-    assert(N >= 2 || .Batched not_in options, "fft_plan: batching needs at least 2 axes")
-
-    p: FFTPlan(A, B, N)
-    half := shape
-    half[N - 1] = shape[N - 1] / 2 + 1
-    p.in_shape = half if KIND == .C2R else shape
-    p.out_shape = half if KIND == .R2C else shape
-    p.options = options
-
-    shape := shape
-    first := 1 if .Batched in options else 0
-    n: [N]c.int
-    for s, i in shape[first:] {
-        n[i] = c.int(s)
+) -> FFTPlan(N) {
+    in_shape, out_shape := shape, shape
+    when A != B {
+        when intrinsics.type_is_complex(A) {
+            in_shape[N - 1] = shape[N - 1] / 2 + 1
+        } else {
+            out_shape[N - 1] = shape[N - 1] / 2 + 1
+        }
     }
-    howmany := math.prod(shape[:first])
-    idist := math.prod(p.in_shape[first:])
-    odist := math.prod(p.out_shape[first:])
+    return fft_plan_layout(
+        A,
+        B,
+        shape,
+        strides(in_shape),
+        strides(out_shape),
+        options,
+        norm,
+        rigor,
+    )
+}
 
-    scratch_in, _ := mem.make_aligned([]A, howmany * idist, 16)
-    defer delete(scratch_in)
-    scratch_out := transmute([]B)scratch_in // only kept for in-place, where A == B
-    if !in_place {
-        scratch_out, _ = mem.make_aligned([]B, howmany * odist, 16)
-    }
-    defer if !in_place {
-        delete(scratch_out)
-    }
-
-    flags := fft_rigor_flags[rigor]
-    if .Unaligned in options {
-        flags += {.UNALIGNED}
-    }
-    rank, many := c.int(N - first), c.int(howmany)
-    sync.mutex_lock(&fft_planner_lock)
-    defer sync.mutex_unlock(&fft_planner_lock)
-    when KIND == .C2C {
-        sign := fftw.Sign.BACKWARD if inverse else fftw.Sign.FORWARD
-        p.handle = fftw.plan_many(
-            rank,
-            &n[0],
-            many,
-            raw_data(scratch_in),
-            nil,
-            1,
-            c.int(idist),
-            raw_data(scratch_out),
-            nil,
-            1,
-            c.int(odist),
-            sign,
-            flags,
-        )
+// T is the real precision, f32 or f64; KIND chooses the input and output types.
+@(require_results)
+fft_plan_kind :: proc(
+    $T: typeid,
+    KIND: FFTKind,
+    shape: [$N]int,
+    options := FFTOptions{},
+    norm := FFTNorm.Backward,
+    rigor := FFTRigor.Estimate,
+) -> FFTPlan(N) where T == f32 ||
+    T == f64 {
+    when T == f32 {
+        C :: complex64
     } else {
-        p.handle = fftw.plan_many(
-            rank,
-            &n[0],
-            many,
-            raw_data(scratch_in),
-            nil,
-            1,
-            c.int(idist),
-            raw_data(scratch_out),
-            nil,
-            1,
-            c.int(odist),
-            flags,
-        )
+        C :: complex128
     }
-    assert(p.handle != nil, "fft_plan: FFTW could not plan the transform")
+    if KIND == .C2C {
+        return fft_plan_types(C, C, shape, options, norm, rigor)
+    } else if KIND == .R2C {
+        return fft_plan_types(T, C, shape, options, norm, rigor)
+    } else {
+        return fft_plan_types(C, T, shape, options, norm, rigor)
+    }
+}
 
-    p.scale = math.pow(f64(math.prod(shape[first:])), -fft_norm_power[norm][int(inverse)])
+// Reuse on buffers of the same shapes and strides. Estimate leaves buffers untouched;
+// other rigor may overwrite them during planning. C2R execution may overwrite input.
+@(require_results)
+fft_plan_buffers :: proc(
+    input: Tensor($A, $N),
+    output: Tensor($B, N),
+    options := FFTOptions{},
+    norm := FFTNorm.Backward,
+    rigor := FFTRigor.Estimate,
+) -> FFTPlan(N) {
+    options := options
+    if rawptr(raw_data(input.data)) == rawptr(raw_data(output.data)) {
+        options += {.In_Place}
+    }
+    if !is_aligned(input) || !is_aligned(output) {
+        options += {.Unaligned}
+    }
+    shape := input.shape
+    when intrinsics.type_is_complex(A) && !intrinsics.type_is_complex(B) {
+        shape = output.shape
+    }
+    in_shape, out_shape := shape, shape
+    when A != B {
+        when intrinsics.type_is_complex(A) {
+            in_shape[N - 1] = shape[N - 1] / 2 + 1
+        } else {
+            out_shape[N - 1] = shape[N - 1] / 2 + 1
+        }
+    }
+    assert(
+        input.shape == in_shape && output.shape == out_shape,
+        "fft_plan: tensor shapes do not match",
+    )
+    assert(
+        (rawptr(raw_data(input.data)) == rawptr(raw_data(output.data))) == (.In_Place in options),
+        "fft_plan: in-place buffers required",
+    )
+    return fft_plan_layout(
+        A,
+        B,
+        shape,
+        input.strides,
+        output.strides,
+        options,
+        norm,
+        rigor,
+        raw_data(input.data),
+        raw_data(output.data),
+    )
+}
+
+fft_plan :: proc {
+    fft_plan_types,
+    fft_plan_kind,
+    fft_plan_buffers,
+}
+
+@(private)
+fft_plan_layout :: proc(
+    $A, $B: typeid,
+    shape, in_strides, out_strides: [$N]int,
+    options: FFTOptions,
+    norm: FFTNorm,
+    rigor: FFTRigor,
+    input: [^]A = nil,
+    output: [^]B = nil,
+) -> FFTPlan(N) {
+    p := FFTPlan(N) {
+        in_shape    = shape,
+        out_shape   = shape,
+        in_strides  = in_strides,
+        out_strides = out_strides,
+    }
+    when A != B {
+        when intrinsics.type_is_complex(A) {
+            p.in_shape[N - 1] = shape[N - 1] / 2 + 1
+        } else {
+            p.out_shape[N - 1] = shape[N - 1] / 2 + 1
+        }
+    }
+    if .In_Place in options {
+        assert(in_strides == out_strides, "fft_plan: in-place strides must match")
+    }
+    p.backend = fft_backend.plan_create(
+        A,
+        B,
+        shape,
+        in_strides,
+        out_strides,
+        options,
+        rigor,
+        input,
+        output,
+    )
+    inverse := p.kind == .C2R || (p.kind == .C2C && .Inverse in options)
+    power := [FFTNorm][2]f64 {
+        .Backward = {0, 1},
+        .Ortho    = {0.5, 0.5},
+        .Forward  = {1, 0},
+    }
+    first := 1 if .Batched in options else 0
+    shape := shape
+    p.scale = math.pow(f64(math.prod(shape[first:])), -power[norm][int(inverse)])
     return p
 }
 
-fft_destroy :: proc(p: ^FFTPlan($A, $B, $N)) {
-    sync.mutex_lock(&fft_planner_lock)
-    fftw.destroy(p.handle)
-    sync.mutex_unlock(&fft_planner_lock)
+fft_destroy :: proc(p: ^FFTPlan($N)) {
+    fft_backend.destroy(&p.backend)
     p^ = {}
 }
 
-// Runs the plan on any tensors of the planned shapes (the same tensor twice for In_Place).
-fft_execute :: proc(p: FFTPlan($A, $B, $N), input: Tensor(A, N), output: Tensor(B, N)) {
-    assert_contiguous(input)
-    assert_contiguous(output)
-    src, dst := raw_data(input.data), raw_data(output.data)
+// Direct execution on planned layouts, including views; C2R may overwrite input.
+fft_execute :: proc(p: FFTPlan($N), input: Tensor($A, N), output: Tensor($B, N)) {
     assert(
         input.shape == p.in_shape && output.shape == p.out_shape,
         "fft_execute: tensor shapes do not match the plan",
     )
     assert(
+        input.strides == p.in_strides && output.strides == p.out_strides,
+        "fft_execute: tensor strides do not match the plan",
+    )
+    src, dst := raw_data(input.data), raw_data(output.data)
+    assert(
         (rawptr(src) == rawptr(dst)) == (.In_Place in p.options),
-        "fft_execute: in-place-ness does not match the plan",
+        "fft_execute: in-place buffers do not match the plan",
     )
     assert(
         .Unaligned in p.options || (is_aligned(input) && is_aligned(output)),
-        "fft_execute: unaligned tensors need a plan with .Unaligned",
+        "fft_execute: unaligned buffers need .Unaligned",
     )
-
-    fftw.execute_arrays(p.handle, src, dst)
-
+    fft_backend.execute(p.backend, src, dst)
     if p.scale != 1 {
-        s := B(p.scale)
-        for &x in output.data {
-            x *= s
+        l := plan_loop(output.shape, output.strides)
+        step := loop_step(l, output.strides)
+        for r in 0 ..< l.rows {
+            offset := row_offset(l, r, output.strides)
+            for k in 0 ..< l.n {
+                output.data[offset + k * step] *= B(p.scale)
+            }
         }
     }
 }
 
-// One-shot transform into a new tensor; of the options only .Batched and .Inverse apply.
+// One-shot into existing storage, including views. Like fft_execute, C2R may overwrite input.
+fft_into :: proc(
+    input: Tensor($A, $N),
+    output: Tensor($B, N),
+    options := FFTOptions{},
+    norm := FFTNorm.Backward,
+) {
+    p := fft_plan_buffers(input, output, options, norm)
+    defer fft_destroy(&p)
+    fft_execute(p, input, output)
+}
+
+// One-shot FFT with explicit output type. C2R needs Inverse; n supplies an odd real length.
+// Input is preserved; only C2R needs a copy. Planning uses the actual buffers.
 @(require_results)
 fft_transform :: proc(
     $B: typeid,
     t: Tensor($A, $N),
-    shape: [N]int,
     options := FFTOptions{},
     norm := FFTNorm.Backward,
+    n := 0,
     allocator := context.allocator,
 ) -> Tensor(B, N) {
-    t := contiguous(t)
-    defer tensor_destroy(&t)
-    options := options & {.Batched, .Inverse}
-    if !is_aligned(t) {
-        options += {.Unaligned}
+    assert(.In_Place not_in options, "fft: use fft_into for in-place transforms")
+    input := t
+    shape := t.shape
+    when intrinsics.type_is_complex(A) && !intrinsics.type_is_complex(B) {
+        assert(.Inverse in options, "fft: real output requires Inverse")
+        shape[N - 1] = n if n > 0 else 2 * (shape[N - 1] - 1)
+        input = tensor_copy(t, allocator)
+    } else {
+        assert(n == 0, "fft: n is only used for real output")
     }
-    p := fft_plan(A, B, shape, options, norm)
-    defer fft_destroy(&p)
-    out := zeros(B, p.out_shape, allocator)
-    fft_execute(p, t, out)
+    defer if raw_data(input.data) != raw_data(t.data) {
+        tensor_destroy(&input)
+    }
+    out_shape := shape
+    when !intrinsics.type_is_complex(A) && intrinsics.type_is_complex(B) {
+        out_shape[N - 1] = shape[N - 1] / 2 + 1
+    }
+    out := zeros(B, out_shape, allocator)
+    fft_into(input, out, options, norm)
     return out
 }
 
@@ -228,8 +312,9 @@ fft_complex :: proc(
     options := FFTOptions{},
     norm := FFTNorm.Backward,
     allocator := context.allocator,
-) -> Tensor(C, N) where intrinsics.type_is_complex(C) {
-    return fft_transform(C, t, t.shape, options - {.Inverse}, norm, allocator)
+) -> Tensor(C, N) where C == complex64 ||
+    C == complex128 {
+    return fft_transform(C, t, options, norm, allocator = allocator)
 }
 
 @(require_results)
@@ -239,7 +324,7 @@ fft_f32 :: proc(
     norm := FFTNorm.Backward,
     allocator := context.allocator,
 ) -> Tensor(complex64, N) {
-    return fft_transform(complex64, t, t.shape, options, norm, allocator)
+    return fft_transform(complex64, t, options, norm, allocator = allocator)
 }
 
 @(require_results)
@@ -249,40 +334,26 @@ fft_f64 :: proc(
     norm := FFTNorm.Backward,
     allocator := context.allocator,
 ) -> Tensor(complex128, N) {
-    return fft_transform(complex128, t, t.shape, options, norm, allocator)
+    return fft_transform(complex128, t, options, norm, allocator = allocator)
 }
 
-// Complex tensors give the full spectrum, real tensors the half spectrum [..., n/2+1].
 fft :: proc {
+    fft_transform,
     fft_complex,
     fft_f32,
     fft_f64,
 }
 
+// Convenience for a complex inverse; fft(t, {.Inverse}) is equivalent.
 @(require_results)
 invfft :: proc(
     t: Tensor($C, $N),
     options := FFTOptions{},
     norm := FFTNorm.Backward,
     allocator := context.allocator,
-) -> Tensor(C, N) where intrinsics.type_is_complex(C) {
-    return fft_transform(C, t, t.shape, options + {.Inverse}, norm, allocator)
-}
-
-// Inverse of a real fft; n is the real length of the last axis, 0 for 2 * (m - 1).
-@(require_results)
-invrfft :: proc(
-    t: Tensor($C, $N),
-    n := 0,
-    options := FFTOptions{},
-    norm := FFTNorm.Backward,
-    allocator := context.allocator,
-) -> Tensor(intrinsics.type_elem_type(C), N) where intrinsics.type_is_complex(C) {
-    shape := t.shape
-    shape[N - 1] = n if n > 0 else 2 * (shape[N - 1] - 1)
-    tmp := tensor_copy(t) // complex -> real destroys its input
-    defer tensor_destroy(&tmp)
-    return fft_transform(intrinsics.type_elem_type(C), tmp, shape, options, norm, allocator)
+) -> Tensor(C, N) where C == complex64 ||
+    C == complex128 {
+    return fft_transform(C, t, options + {.Inverse}, norm, allocator = allocator)
 }
 
 // Sample frequencies of an n-point fft with sample spacing d: [0, 1, ..., -2, -1] / (d * n)

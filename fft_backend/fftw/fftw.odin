@@ -1,65 +1,58 @@
 package fftw
-import "../config"
+
 import "core:c"
+
+import "../../config"
 
 // Raw FFTW 3 bindings without the fftw_ prefix: plan_dft is fftw_plan_dft (f64),
 // f_plan_dft is fftwf_plan_dft (f32). Constants and enum members drop the FFTW_ prefix.
 
-when config.OMAT_FFT_BACKEND == .fftw {
+plan :: distinct rawptr
+f_plan :: distinct rawptr
+
+Sign :: enum c.int {
+    FORWARD  = -1,
+    BACKWARD = +1,
+}
+
+NO_TIMELIMIT :: -1.0
+
+Flag :: enum c.uint {
+    DESTROY_INPUT   = 0,
+    UNALIGNED       = 1,
+    CONSERVE_MEMORY = 2,
+    EXHAUSTIVE      = 3,
+    PRESERVE_INPUT  = 4,
+    PATIENT         = 5,
+    ESTIMATE        = 6,
+    WISDOM_ONLY     = 21,
+}
+Flags :: bit_set[Flag;c.uint]
+
+r2r_kind :: enum c.int {
+    R2HC,
+    HC2R,
+    DHT,
+    REDFT00,
+    REDFT01,
+    REDFT10,
+    REDFT11,
+    RODFT00,
+    RODFT01,
+    RODFT10,
+    RODFT11,
+}
+
+iodim :: struct {
+    n, is, os: c.int,
+}
+
+when config.USE_FFTW {
     foreign import fftw3 {config.FFTW3}
     foreign import fftw3f {config.FFTW3F}
     when config.USE_FFTW_THREADS {
         foreign import fftw3_threads {config.FFTW3_THREADS}
         foreign import fftw3f_threads {config.FFTW3F_THREADS}
-    }
-
-    plan :: distinct rawptr
-    f_plan :: distinct rawptr
-
-    Sign :: enum c.int {
-        FORWARD  = -1,
-        BACKWARD = +1,
-    }
-
-    NO_TIMELIMIT :: -1.0
-
-    Flag :: enum c.uint {
-        DESTROY_INPUT   = 0,
-        UNALIGNED       = 1,
-        CONSERVE_MEMORY = 2,
-        EXHAUSTIVE      = 3,
-        PRESERVE_INPUT  = 4,
-        PATIENT         = 5,
-        ESTIMATE        = 6,
-        WISDOM_ONLY     = 21,
-    }
-    Flags :: distinct bit_set[Flag;c.uint]
-
-    // planner rigor, combine with other flags: fftw.PATIENT | {.DESTROY_INPUT}
-    MEASURE :: Flags{}
-    ESTIMATE :: Flags{.ESTIMATE}
-    PATIENT :: Flags{.PATIENT}
-    EXHAUSTIVE :: Flags{.EXHAUSTIVE}
-
-    r2r_kind :: enum c.int {
-        R2HC,
-        HC2R,
-        DHT,
-        REDFT00,
-        REDFT01,
-        REDFT10,
-        REDFT11,
-        RODFT00,
-        RODFT01,
-        RODFT10,
-        RODFT11,
-    }
-
-    iodim :: struct {
-        n, is, os: c.int,
-    }
-
-    when config.USE_FFTW_THREADS {
         // FFTW's planner is not thread-safe by default, only execute is.
         @(init, private)
         make_thread_safe :: proc "contextless" () {
@@ -206,31 +199,6 @@ when config.OMAT_FFT_BACKEND == .fftw {
             f_cleanup_threads :: proc() ---
             f_make_planner_thread_safe :: proc() ---
         }
-    }
-
-    // One name for the f64 and f32 variants, resolved from the argument types
-    plan_many :: proc {
-        plan_many_dft,
-        f_plan_many_dft,
-        plan_many_dft_r2c,
-        f_plan_many_dft_r2c,
-        plan_many_dft_c2r,
-        f_plan_many_dft_c2r,
-    }
-
-    // the new-array execute functions: run a plan on other arrays of the planned shape
-    execute_arrays :: proc {
-        execute_dft,
-        f_execute_dft,
-        execute_dft_r2c,
-        f_execute_dft_r2c,
-        execute_dft_c2r,
-        f_execute_dft_c2r,
-    }
-
-    destroy :: proc {
-        destroy_plan,
-        f_destroy_plan,
     }
 }
 

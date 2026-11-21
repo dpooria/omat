@@ -20,7 +20,7 @@ main :: proc() {
     spectrum := om.fft(signal)
     high := om.view(spectrum, {9}, {spectrum.shape[0]})
     om.fill(&high, 0)
-    clean := om.invrfft(spectrum, n)
+    clean := om.fft(f64, spectrum, {.Inverse}, n = n)
 
     fmt.printf("First eight samples before filtering: %v\n", signal.data[:8])
     fmt.printf("First eight samples after filtering:  %v\n", clean.data[:8])
