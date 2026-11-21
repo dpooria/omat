@@ -1,0 +1,3 @@
+[submodule "pocketfft"]
+	path = pocketfft/pocketfft
+	url = git@github.com:mreineck/pocketfft.git
