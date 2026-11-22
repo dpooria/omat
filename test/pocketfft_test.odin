@@ -9,12 +9,21 @@ import "../fft_backend/pocketfft"
 when !config.USE_FFTW {
     @(test)
     pocketfft_raw_complex :: proc(t: ^testing.T) {
-        pocketfft_raw_complex_check(t, complex64)
-        pocketfft_raw_complex_check(t, complex128)
+        pocketfft_raw_complex_check(t, complex64, 2, 1)
+        pocketfft_raw_complex_check(t, complex128, 2, 1)
     }
 
-    pocketfft_raw_complex_check :: proc(t: ^testing.T, $C: typeid) {
-        n, batches :: 7, 2
+    when !config.POCKETFFT_NO_MULTITHREADING {
+        @(test)
+        pocketfft_raw_complex_threaded :: proc(t: ^testing.T) {
+            // Enough independent rows for PocketFFT to schedule two workers.
+            pocketfft_raw_complex_check(t, complex64, 64, 2)
+            pocketfft_raw_complex_check(t, complex128, 64, 2)
+        }
+    }
+
+    pocketfft_raw_complex_check :: proc(t: ^testing.T, $C: typeid, $batches: int, threads: int) {
+        n :: 7
         in_row, out_row :: 2 * n + 1, 3 * n + 1
         shape := [2]int{batches, n}
         si := [2]int{in_row * size_of(C), 2 * size_of(C)}
@@ -23,12 +32,13 @@ when !config.USE_FFTW {
         output: [batches * out_row]C
         for &v in output do v = 99
         for b in 0 ..< batches {
+            offset := f64(b) / 16
             for j in 0 ..< n {
-                input[b * in_row + 2 * j] = C(complex(f64(j + b), f64(j - b) / 4))
+                input[b * in_row + 2 * j] = C(complex(f64(j) + offset, (f64(j) - offset) / 4))
             }
         }
         original := input
-        p := pocketfft.plan_create(2, &shape[0], &si[0], &so[0], 1, 0, C == complex64, false, 1)
+        p := pocketfft.plan_create(2, &shape[0], &si[0], &so[0], 1, 0, C == complex64, false, threads)
         defer pocketfft.destroy(p)
         testing.expect(t, p != nil)
         tol := 1e-4 when C == complex64 else 1e-11
@@ -52,7 +62,7 @@ when !config.USE_FFTW {
         testing.expect_value(t, output[1], C(99))
         testing.expect_value(t, output[len(output) - 1], C(99))
 
-        inv := pocketfft.plan_create(2, &shape[0], &so[0], &so[0], 1, 0, C == complex64, true, 1)
+        inv := pocketfft.plan_create(2, &shape[0], &so[0], &so[0], 1, 0, C == complex64, true, threads)
         defer pocketfft.destroy(inv)
         testing.expect(t, inv != nil)
         pocketfft.execute(inv, &output[0], &output[0])

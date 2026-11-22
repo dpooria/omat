@@ -433,7 +433,7 @@ ops_binary_in_place :: proc(t: ^testing.T) {
             testing.expectf(t, max_diff(L.boxed, want) < 1e-12, "%v %v", op, form)
             // the margin around the box is untouched
             tol := 0.0 if config.DISABLE_OPENBLAS else 1e-12
-            testing.expect(t, abs(om.sum(L.parent) - om.sum(L.boxed)) < tol)
+            testing.expect(t, abs(om.sum(L.parent) - om.sum(L.boxed)) <= tol)
             om.tensor_destroy(&want)
             destroy_layouts(&L)
         }
