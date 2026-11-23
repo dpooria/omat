@@ -2,6 +2,7 @@
 
 set -xe
 
+odin run pca.odin -file -debug -sanitize:address
 odin run center_columns.odin -file -debug -sanitize:address
 odin run solve_system.odin -file -debug -sanitize:address
 odin run fft_peak.odin -file -debug -sanitize:address

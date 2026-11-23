@@ -1,9 +1,15 @@
 package main
 
 import "core:fmt"
+import vmem "core:mem/virtual"
+
 import om ".."
 
 main :: proc() {
+    arena: vmem.Arena
+    defer vmem.arena_destroy(&arena)
+    context.allocator = vmem.arena_allocator(&arena)
+
     values := [8]f64{1, 2, 2, 1, 3, 4, 4, 3}
     samples := om.tensor_from_data([2]int{4, 2}, values[:])
     means := om.mean_axis(samples, 0)
