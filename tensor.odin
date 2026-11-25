@@ -46,6 +46,14 @@ tensor_destroy :: proc(t: ^Tensor($T, $N)) {
     t^ = {}
 }
 
+when ODIN_VERSION >= "dev-2026-12" {
+    tensor_destroy_many :: proc(t: ..^Tensor($T, $N)) {
+        for t_ in t {
+            tensor_destroy(t_)
+        }
+    }
+}
+
 // A contiguous copy of any tensor or view
 @(require_results)
 tensor_copy :: proc(src: Tensor($T, $N), allocator := context.allocator) -> Tensor(T, N) {

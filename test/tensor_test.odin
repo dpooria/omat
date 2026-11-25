@@ -20,6 +20,17 @@ tensor_create_copy_and_destroy :: proc(t: ^testing.T) {
     om.tensor_destroy(&tensor)
 }
 
+when ODIN_VERSION >= "dev-2026-12" {
+    @(test)
+    tensor_destroy_many_works :: proc(t: ^testing.T) {
+        a := om.randn(f64, [2]int{5, 5})
+        b := om.randu(f64, [2]int{5, 5})
+        om.tensor_destroy_many(&a, &b)
+        testing.expect_value(t, len(a.data), 0)
+        testing.expect_value(t, len(b.data), 0)
+    }
+}
+
 @(test)
 tensor_from_existing_data :: proc(t: ^testing.T) {
     data := make([]f64, 4)
